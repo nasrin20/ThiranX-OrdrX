@@ -548,6 +548,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 placeholder="WhatsApp number"
                 className={inputCls}
               />
+              <p className="text-xs text-gray-400 mt-1">
+                Include country code e.g. +91 for India
+                </p>
               <textarea
                 value={form.note}
                 onChange={(e) => update('note', e.target.value)}
