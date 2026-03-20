@@ -346,9 +346,9 @@ export default function ProductsPage() {
               size="sm"
               onClick={() => {
                 navigator.clipboard.writeText(
-                  `https://ordrx.in/@${business.slug}`
+                    `${window.location.origin}/${business.slug}`
                 )
-              }}
+                }}
             >
               Copy 📋
             </Button>
