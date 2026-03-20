@@ -204,6 +204,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   }
 
   // ── Place order ───────────────────────────────────────────
+  // ── REPLACE the placeOrder function in StorefrontClient.tsx ──
+// Find the existing placeOrder function and replace with this:
+
   const placeOrder = async () => {
     if (!selected) return
 
@@ -215,60 +218,39 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setLoading(true)
     setError(null)
 
-    const ref = generateRef()
-
-    // Upsert customer
-    const { data: customer, error: custError } = await supabase
-      .from('customers')
-      .upsert(
-        {
-          business_id: business.id,
-          name:        form.customerName.trim(),
-          phone:       form.customerPhone.trim(),
-        },
-        { onConflict: 'business_id,phone' }
-      )
-      .select()
-      .single()
-
-    if (custError || !customer) {
-      setError('Something went wrong. Please try again.')
-      setLoading(false)
-      return
-    }
-
-    // Create order
-    const { error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        business_id: business.id,
-        customer_id: customer.id,
-        order_ref:   ref,
-        product_id:  selected.id,
-        variant:     form.variant || null,
-        quantity:    form.quantity,
-        amount:      totalAmount,
-        status:      'pending',
-        notes:       form.note.trim() || null,
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          business_id:    business.id,
+          customer_name:  form.customerName.trim(),
+          customer_phone: form.customerPhone.trim(),
+          product_id:     selected.id,
+          variant:        form.variant || null,
+          quantity:       form.quantity,
+          amount:         totalAmount,
+          notes:          form.note.trim() || null,
+        }),
       })
 
-    if (orderError) {
-      setError('Failed to place order. Please try again.')
-      setLoading(false)
-      return
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        setError(data.error ?? 'Failed to place order. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      setOrderRef(data.order_ref)
+      setScreen('confirmed')
+
+    } catch {
+      setError('Something went wrong. Please try again.')
     }
 
-    // Reduce stock
-    await supabase
-      .from('products')
-      .update({ stock: selected.stock - form.quantity })
-      .eq('id', selected.id)
-
-    setOrderRef(ref)
-    setScreen('confirmed')
     setLoading(false)
   }
-
   // ── Input class ───────────────────────────────────────────
   const inputCls = [
     'w-full px-4 py-3 rounded-xl border text-sm',
