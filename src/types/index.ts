@@ -55,6 +55,7 @@ export interface Product {
   tag:         string | null
   variants:    string[]
   active:      boolean
+  photo_url:   string | null  // ← ADD THIS LINE
   created_at:  string
 }
 
