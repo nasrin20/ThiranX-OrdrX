@@ -1,6 +1,6 @@
-// OrdrX — Central Type Definitions
+// OrdrX -- Central Type Definitions
 
-// ── Business Types ─────────────────────────────────────────
+// -- Business Types
 export type BusinessType =
   | 'perfume'
   | 'clothing'
@@ -12,14 +12,14 @@ export type BusinessType =
   | 'digital'
   | 'other'
 
-// ── Plan Types ─────────────────────────────────────────────
+// -- Plan Types
 export type PlanType =
   | 'free'
   | 'starter'
   | 'growth'
   | 'pro'
 
-// ── Order Status ───────────────────────────────────────────
+// -- Order Status
 export type OrderStatus =
   | 'pending'
   | 'paid'
@@ -27,7 +27,7 @@ export type OrderStatus =
   | 'cancelled'
   | 'overdue'
 
-// ── Database Models ────────────────────────────────────────
+// -- Business
 export interface Business {
   id:          string
   user_id:     string
@@ -43,6 +43,7 @@ export interface Business {
   created_at:  string
 }
 
+// -- Product
 export interface Product {
   id:          string
   business_id: string
@@ -59,6 +60,7 @@ export interface Product {
   created_at:  string
 }
 
+// -- Customer
 export interface Customer {
   id:               string
   business_id:      string
@@ -70,6 +72,7 @@ export interface Customer {
   created_at:       string
 }
 
+// -- Order
 export interface Order {
   id:            string
   business_id:   string
@@ -85,7 +88,8 @@ export interface Order {
   notes:         string | null
   created_at:    string
 }
-// Extended order type with joined data
+
+// -- Order with joined data
 export interface OrderWithDetails extends Order {
   customers?: { name: string; phone: string } | null
   products?:  { name: string } | null
