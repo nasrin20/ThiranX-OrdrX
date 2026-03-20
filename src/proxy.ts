@@ -1,5 +1,5 @@
-// OrdrX Proxy (formerly middleware)
-// Refreshes auth session and protects routes
+// OrdrX Proxy
+// Protects dashboard routes only — storefront is public
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -28,30 +28,34 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Refresh session
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protect dashboard routes
-  if (
-    !user &&
-    request.nextUrl.pathname.startsWith('/dashboard')
-  ) {
+  const path = request.nextUrl.pathname
+
+  // ── Public routes — never redirect ──────────────────────
+  // Storefront pages like /madhu-the-mehak are public
+  const isAuthPage      = path === '/login' || path === '/signup'
+  const isDashboardPage = path.startsWith('/dashboard') ||
+                          path.startsWith('/products')  ||
+                          path.startsWith('/orders')    ||
+                          path.startsWith('/customers') ||
+                          path.startsWith('/onboarding')
+
+  // Protect dashboard — redirect to login if not logged in
+  if (!user && isDashboardPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   // Redirect logged in users away from auth pages
-  if (
-    user &&
-    (request.nextUrl.pathname === '/login' ||
-     request.nextUrl.pathname === '/signup')
-  ) {
+  if (user && isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
+  // All other routes (storefront) — let through freely ✅
   return supabaseResponse
 }
 
