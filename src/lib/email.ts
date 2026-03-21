@@ -7,7 +7,7 @@ import { Resend } from 'resend'
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 // ── From address ───────────────────────────────────────────
-const FROM = 'OrdrX <onboarding@resend.dev>'
+const FROM = 'OrdrX <orders@ordrx.in>'
 
 // ── Types ──────────────────────────────────────────────────
 interface OrderEmailData {
