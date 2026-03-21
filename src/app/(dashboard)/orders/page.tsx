@@ -1,11 +1,17 @@
 'use client'
 
 // OrdrX — Orders Page
-// Full order management with filters and actions
+// Full order management with WhatsApp invoice sending
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Order, OrderStatus, Business } from '@/types'
+import { Order, OrderStatus, Business, BusinessType } from '@/types'
+import {
+  generateInvoiceMessage,
+  generateReminderMessage,
+  generateShippedMessage,
+  generateWhatsAppUrl,
+} from '@/constants/whatsapp'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
@@ -22,13 +28,12 @@ const STATUS_CONFIG: Record<OrderStatus, {
   label: string
   color: string
   bg:    string
-  dark:  string
 }> = {
-  pending:   { label: 'Pending',   color: '#92400e', bg: '#fef9c3', dark: 'dark:bg-yellow-950 dark:text-yellow-400' },
-  paid:      { label: 'Paid',      color: '#14532d', bg: '#dcfce7', dark: 'dark:bg-green-950  dark:text-green-400'  },
-  shipped:   { label: 'Shipped',   color: '#1e3a8a', bg: '#dbeafe', dark: 'dark:bg-blue-950   dark:text-blue-400'   },
-  cancelled: { label: 'Cancelled', color: '#6b7280', bg: '#f3f4f6', dark: 'dark:bg-gray-800   dark:text-gray-400'   },
-  overdue:   { label: 'Overdue',   color: '#991b1b', bg: '#fee2e2', dark: 'dark:bg-red-950    dark:text-red-400'    },
+  pending:   { label: 'Pending',   color: '#92400e', bg: '#fef9c3' },
+  paid:      { label: 'Paid',      color: '#14532d', bg: '#dcfce7' },
+  shipped:   { label: 'Shipped',   color: '#1e3a8a', bg: '#dbeafe' },
+  cancelled: { label: 'Cancelled', color: '#6b7280', bg: '#f3f4f6' },
+  overdue:   { label: 'Overdue',   color: '#991b1b', bg: '#fee2e2' },
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -37,9 +42,7 @@ const formatPrice = (paise: number) =>
 
 const formatDate = (dateStr: string) =>
   new Date(dateStr).toLocaleDateString('en-IN', {
-    day:   'numeric',
-    month: 'short',
-    year:  'numeric',
+    day: 'numeric', month: 'short', year: 'numeric',
   })
 
 // ── Status Badge ───────────────────────────────────────────
@@ -47,10 +50,7 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   const s = STATUS_CONFIG[status]
   return (
     <span
-      className={cn(
-        'text-xs font-bold px-2.5 py-1 rounded-full',
-        s.dark,
-      )}
+      className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
       style={{ background: s.bg, color: s.color }}
     >
       {s.label}
@@ -61,15 +61,40 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 // ── Order Card ─────────────────────────────────────────────
 function OrderCard({
   order,
+  business,
   onStatusChange,
 }: {
   order:          OrderWithDetails
+  business:       Business
   onStatusChange: (id: string, status: OrderStatus) => void
 }) {
   const [expanded, setExpanded] = useState(false)
 
-  const whatsappMsg = encodeURIComponent(
-    `Hi ${order.customer_name}! 👋\n\nYour order ${order.order_ref} for ${order.product_name} (${formatPrice(order.amount)}) is confirmed.\n\nPlease complete payment to proceed.\n\n— OrdrX`
+  const invoiceData = {
+    orderRef:      order.order_ref,
+    customerName:  order.customer_name,
+    customerPhone: order.customer_phone,
+    productName:   order.product_name,
+    variant:       order.variant,
+    quantity:      order.quantity,
+    amount:        order.amount,
+    businessName:  business.name,
+    businessType:  business.type as BusinessType,
+    whatsapp:      business.whatsapp,
+    notes:         order.notes,
+  }
+
+  const invoiceUrl  = generateWhatsAppUrl(
+    order.customer_phone,
+    generateInvoiceMessage(invoiceData),
+  )
+  const reminderUrl = generateWhatsAppUrl(
+    order.customer_phone,
+    generateReminderMessage(invoiceData),
+  )
+  const shippedUrl  = generateWhatsAppUrl(
+    order.customer_phone,
+    generateShippedMessage(invoiceData),
   )
 
   return (
@@ -82,13 +107,11 @@ function OrderCard({
           hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
         onClick={() => setExpanded((e) => !e)}
       >
-        {/* Product emoji */}
         <div className="w-11 h-11 rounded-xl bg-[#fdf6ef] dark:bg-gray-800
           flex items-center justify-center text-xl flex-shrink-0">
           {order.product_emoji}
         </div>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
@@ -100,12 +123,11 @@ function OrderCard({
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
             {order.product_name}
-            {order.variant   ? ` · ${order.variant}`   : ''}
-            {order.quantity > 1 ? ` × ${order.quantity}` : ''}
+            {order.variant     ? ` · ${order.variant}`    : ''}
+            {order.quantity > 1 ? ` × ${order.quantity}`  : ''}
           </p>
         </div>
 
-        {/* Amount + date */}
         <div className="text-right flex-shrink-0">
           <p className="text-sm font-bold text-[#b5860d]">
             {formatPrice(order.amount)}
@@ -115,27 +137,21 @@ function OrderCard({
           </p>
         </div>
 
-        {/* Status */}
-        <div className="flex-shrink-0">
-          <StatusBadge status={order.status} />
-        </div>
+        <StatusBadge status={order.status} />
 
-        {/* Chevron */}
         <span className={cn(
           'text-gray-400 text-xs transition-transform flex-shrink-0',
           expanded && 'rotate-180',
-        )}>
-          ▼
-        </span>
+        )}>▼</span>
       </div>
 
-      {/* Expanded details */}
+      {/* Expanded */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-800">
 
-          {/* Details grid */}
+          {/* Details */}
           <div className="grid grid-cols-2 gap-2 py-3">
-            {[
+            {([
               ['Customer',  order.customer_name],
               ['Phone',     order.customer_phone],
               ['Product',   order.product_name],
@@ -144,11 +160,9 @@ function OrderCard({
               ['Amount',    formatPrice(order.amount)],
               ['Order Ref', order.order_ref],
               ['Date',      formatDate(order.created_at)],
-            ].map(([label, value]) => (
+            ] as [string, string][]).map(([label, value]) => (
               <div key={label}>
-                <p className="text-xs text-gray-400 dark:text-gray-500">
-                  {label}
-                </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">{label}</p>
                 <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                   {value}
                 </p>
@@ -158,36 +172,66 @@ function OrderCard({
 
           {/* Notes */}
           {order.notes && (
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 mb-3">
-              <p className="text-xs text-gray-400 mb-0.5">Note</p>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl
+              px-3 py-2 mb-3">
+              <p className="text-xs text-gray-400 mb-0.5">Customer Note</p>
               <p className="text-xs text-gray-600 dark:text-gray-300">
                 {order.notes}
               </p>
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* WhatsApp messages */}
+          <div className="bg-[#f0fdf4] dark:bg-green-950 rounded-xl p-3 mb-3">
+            <p className="text-xs font-bold text-green-700 dark:text-green-400 mb-2">
+              💬 WhatsApp Messages
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={invoiceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl
+                  bg-[#25D366] text-white text-xs font-bold"
+              >
+                🧾 Send Invoice
+              </a>
+
+              {(order.status === 'pending' || order.status === 'overdue') && (
+                <a
+                  href={reminderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl
+                    bg-yellow-500 text-white text-xs font-bold"
+                >
+                  ⏰ Send Reminder
+                </a>
+              )}
+
+              {order.status === 'shipped' && (
+                <a
+                  href={shippedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl
+                    bg-blue-500 text-white text-xs font-bold"
+                >
+                  🚚 Shipped Message
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Status actions */}
           <div className="flex flex-wrap gap-2">
-
-            {/* WhatsApp */}
-            <a
-              href={`https://wa.me/${order.customer_phone.replace(/\D/g, '')}?text=${whatsappMsg}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl
-                bg-[#25D366] text-white text-xs font-bold"
-            >
-              💬 WhatsApp
-            </a>
-
-            {/* Status actions */}
             {order.status === 'pending' && (
               <>
                 <button
                   type="button"
                   onClick={() => onStatusChange(order.id, 'paid')}
-                  className="px-3 py-2 rounded-xl bg-green-500 text-white
-                    text-xs font-bold"
+                  className="px-3 py-2 rounded-xl bg-green-500
+                    text-white text-xs font-bold"
                 >
                   ✅ Mark Paid
                 </button>
@@ -206,8 +250,8 @@ function OrderCard({
               <button
                 type="button"
                 onClick={() => onStatusChange(order.id, 'shipped')}
-                className="px-3 py-2 rounded-xl bg-blue-500 text-white
-                  text-xs font-bold"
+                className="px-3 py-2 rounded-xl bg-blue-500
+                  text-white text-xs font-bold"
               >
                 🚚 Mark Shipped
               </button>
@@ -223,8 +267,8 @@ function OrderCard({
                 ✕ Cancel
               </button>
             )}
-
           </div>
+
         </div>
       )}
     </div>
@@ -242,7 +286,6 @@ export default function OrdersPage() {
   const [filter,   setFilter]   = useState<OrderStatus | 'all'>('all')
   const [search,   setSearch]   = useState('')
 
-  // ── Fetch ──────────────────────────────────────────────
   const fetchOrders = useCallback(async () => {
     setLoading(true)
 
@@ -282,13 +325,11 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
 
-  // ── Update status ──────────────────────────────────────
   const updateStatus = async (id: string, status: OrderStatus) => {
     await supabase.from('orders').update({ status }).eq('id', id)
     fetchOrders()
   }
 
-  // ── Filtered orders ────────────────────────────────────
   const filtered = orders.filter((o) => {
     const matchFilter = filter === 'all' || o.status === filter
     const matchSearch =
@@ -298,14 +339,12 @@ export default function OrdersPage() {
     return matchFilter && matchSearch
   })
 
-  // ── Stats ──────────────────────────────────────────────
   const totalRevenue = orders
     .filter((o) => o.status === 'paid')
     .reduce((s, o) => s + o.amount, 0)
 
   const pendingCount = orders.filter((o) => o.status === 'pending').length
 
-  // ── Loading ────────────────────────────────────────────
   if (loading) {
     return (
       <main className="min-h-screen bg-[#fdf6ef] dark:bg-gray-950
@@ -320,12 +359,10 @@ export default function OrdersPage() {
     )
   }
 
-  // ── Render ─────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-[#fdf6ef] dark:bg-gray-950 pb-12">
       <div className="max-w-2xl mx-auto px-4 pt-8">
 
-        {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             📦 Orders
@@ -346,14 +383,12 @@ export default function OrdersPage() {
         {/* Search */}
         <div className="relative mb-4">
           <span className="absolute left-3 top-1/2 -translate-y-1/2
-            text-gray-400 text-sm">
-            🔍
-          </span>
+            text-gray-400 text-sm">🔍</span>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by customer, product or order ref..."
+            placeholder="Search by customer, product or ref..."
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm
               outline-none transition-colors
               text-gray-900 dark:text-gray-100
@@ -370,7 +405,6 @@ export default function OrdersPage() {
             const count = f === 'all'
               ? orders.length
               : orders.filter((o) => o.status === f).length
-
             return (
               <button
                 key={f}
@@ -387,9 +421,7 @@ export default function OrdersPage() {
                 {f.charAt(0).toUpperCase() + f.slice(1)}
                 <span className={cn(
                   'text-xs px-1.5 py-0.5 rounded-full',
-                  filter === f
-                    ? 'bg-white/20 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800',
+                  filter === f ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-800',
                 )}>
                   {count}
                 </span>
@@ -398,7 +430,7 @@ export default function OrdersPage() {
           })}
         </div>
 
-        {/* Orders list */}
+        {/* Orders */}
         {filtered.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-4xl mb-3">📭</div>
@@ -409,11 +441,14 @@ export default function OrdersPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                onStatusChange={updateStatus}
-              />
+              business && (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  business={business}
+                  onStatusChange={updateStatus}
+                />
+              )
             ))}
           </div>
         )}
