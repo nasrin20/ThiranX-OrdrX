@@ -51,10 +51,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Get business + seller email ────────────────────────
+    // ── Get business ───────────────────────────────────────
     const { data: business, error: bizError } = await supabaseAdmin
       .from('businesses')
-      .select('id, name, slug, email, whatsapp, type, active')
+      .select('id, name, slug, email, whatsapp, type, active, user_id')
       .eq('id', business_id)
       .eq('active', true)
       .single()
@@ -66,39 +66,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Get seller email from auth ─────────────────────────
-    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers()
-    const sellerUser = users.find((u) =>
-      // Match by checking businesses table user_id
-      true // placeholder — we get email from businesses below
-    )
+    // ── Get seller email ───────────────────────────────────
+    // Priority 1: email set in settings
+    // Priority 2: email used to sign up
+    let sellerEmail: string | null = business.email ?? null
 
-    // Get seller email via user_id
-    const { data: bizWithUser } = await supabaseAdmin
-      .from('businesses')
-      .select('user_id')
-      .eq('id', business_id)
-      .single()
+    if (!sellerEmail && business.user_id) {
+      const { data: { user } } = await supabaseAdmin
+        .auth.admin.getUserById(business.user_id)
+      sellerEmail = user?.email ?? null
+    }
 
-    // Get seller email — try business email first, then auth
-let sellerEmail: string | null = business.email ?? null
-
-if (!sellerEmail) {
-  // Fallback to auth email
-  const { data: bizUser } = await supabaseAdmin
-    .from('businesses')
-    .select('user_id')
-    .eq('id', business_id)
-    .single()
-
-  if (bizUser?.user_id) {
-    const { data: { user } } = await supabaseAdmin
-      .auth.admin.getUserById(bizUser.user_id)
-    sellerEmail = user?.email ?? null
-  }
-}
-
-console.log('Sending email to:', sellerEmail)
+    console.log('Sending order email to:', sellerEmail)
 
     // ── Verify product ─────────────────────────────────────
     const { data: product, error: prodError } = await supabaseAdmin
@@ -175,8 +154,7 @@ console.log('Sending email to:', sellerEmail)
       .update({ stock: product.stock - quantity })
       .eq('id', product_id)
 
-    // ── Send email notification to seller ──────────────────
-    // Non-blocking — don't fail order if email fails
+    // ── Send email to seller ───────────────────────────────
     if (sellerEmail) {
       sendNewOrderEmail({
         sellerEmail,

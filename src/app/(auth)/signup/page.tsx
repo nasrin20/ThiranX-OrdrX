@@ -206,7 +206,7 @@ export default function SignupPage() {
                 type="text"
                 value={form.name}
                 onChange={update('name')}
-                placeholder="e.g. Madhu"
+                placeholder="e.g. John Smith"
                 className={errors.name ? inputError : inputNormal}
               />
               {errors.name && (
