@@ -80,13 +80,25 @@ export async function POST(req: NextRequest) {
       .eq('id', business_id)
       .single()
 
-    let sellerEmail: string | null = null
-    if (bizWithUser?.user_id) {
-      const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(
-        bizWithUser.user_id
-      )
-      sellerEmail = user?.email ?? null
-    }
+    // Get seller email — try business email first, then auth
+let sellerEmail: string | null = business.email ?? null
+
+if (!sellerEmail) {
+  // Fallback to auth email
+  const { data: bizUser } = await supabaseAdmin
+    .from('businesses')
+    .select('user_id')
+    .eq('id', business_id)
+    .single()
+
+  if (bizUser?.user_id) {
+    const { data: { user } } = await supabaseAdmin
+      .auth.admin.getUserById(bizUser.user_id)
+    sellerEmail = user?.email ?? null
+  }
+}
+
+console.log('Sending email to:', sellerEmail)
 
     // ── Verify product ─────────────────────────────────────
     const { data: product, error: prodError } = await supabaseAdmin

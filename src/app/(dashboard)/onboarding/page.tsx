@@ -211,6 +211,7 @@ export default function OnboardingPage() {
         bio:         form.bio.trim() || null,
         theme_color: '#b5860d',
         plan:        'free',
+        email: user.email,
       })
 
     if (error) {
