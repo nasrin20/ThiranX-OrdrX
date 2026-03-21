@@ -1,12 +1,11 @@
 // OrdrX — Secure Orders API Route
-// Uses service role to bypass RLS safely
-// POST /api/orders
+// Uses service role + sends email notification to seller
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendNewOrderEmail } from '@/lib/email'
 
-// ── Service role client (bypasses RLS) ────────────────────
-// NEVER expose this on the client side
+// ── Service role client ────────────────────────────────────
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -14,21 +13,21 @@ const supabaseAdmin = createClient(
 
 // ── Types ──────────────────────────────────────────────────
 interface OrderRequest {
-  business_id:   string
+  business_id:    string
   customer_name:  string
   customer_phone: string
-  product_id:    string
-  variant:       string | null
-  quantity:      number
-  amount:        number
-  notes:         string | null
+  product_id:     string
+  variant:        string | null
+  quantity:       number
+  amount:         number
+  notes:          string | null
 }
 
 // ── Generate order ref ─────────────────────────────────────
 const generateRef = (): string =>
   'ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase()
 
-// ── POST handler ───────────────────────────────────────────
+// ── POST ───────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body: OrderRequest = await req.json()
@@ -44,7 +43,7 @@ export async function POST(req: NextRequest) {
       notes,
     } = body
 
-    // ── Validate required fields ───────────────────────────
+    // ── Validate ───────────────────────────────────────────
     if (!business_id || !customer_name || !customer_phone || !product_id) {
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -52,10 +51,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Verify business exists and is active ───────────────
+    // ── Get business + seller email ────────────────────────
     const { data: business, error: bizError } = await supabaseAdmin
       .from('businesses')
-      .select('id')
+      .select('id, name, slug, email, whatsapp, type, active')
       .eq('id', business_id)
       .eq('active', true)
       .single()
@@ -67,10 +66,32 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Verify product exists and has stock ────────────────
+    // ── Get seller email from auth ─────────────────────────
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers()
+    const sellerUser = users.find((u) =>
+      // Match by checking businesses table user_id
+      true // placeholder — we get email from businesses below
+    )
+
+    // Get seller email via user_id
+    const { data: bizWithUser } = await supabaseAdmin
+      .from('businesses')
+      .select('user_id')
+      .eq('id', business_id)
+      .single()
+
+    let sellerEmail: string | null = null
+    if (bizWithUser?.user_id) {
+      const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(
+        bizWithUser.user_id
+      )
+      sellerEmail = user?.email ?? null
+    }
+
+    // ── Verify product ─────────────────────────────────────
     const { data: product, error: prodError } = await supabaseAdmin
       .from('products')
-      .select('id, stock, active')
+      .select('id, name, stock, active')
       .eq('id', product_id)
       .eq('active', true)
       .single()
@@ -104,7 +125,6 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (custError || !customer) {
-      console.error('Customer upsert error:', custError)
       return NextResponse.json(
         { error: 'Failed to save customer' },
         { status: 500 }
@@ -131,7 +151,6 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (orderError || !order) {
-      console.error('Order insert error:', orderError)
       return NextResponse.json(
         { error: 'Failed to create order' },
         { status: 500 }
@@ -143,6 +162,24 @@ export async function POST(req: NextRequest) {
       .from('products')
       .update({ stock: product.stock - quantity })
       .eq('id', product_id)
+
+    // ── Send email notification to seller ──────────────────
+    // Non-blocking — don't fail order if email fails
+    if (sellerEmail) {
+      sendNewOrderEmail({
+        sellerEmail,
+        sellerName:    business.name,
+        sellerSlug:    business.slug,
+        customerName:  customer_name.trim(),
+        customerPhone: customer_phone.trim(),
+        productName:   product.name,
+        variant:       variant || null,
+        quantity,
+        amount,
+        orderRef:      ref,
+        notes:         notes?.trim() || null,
+      }).catch(console.error)
+    }
 
     // ── Return success ─────────────────────────────────────
     return NextResponse.json({
