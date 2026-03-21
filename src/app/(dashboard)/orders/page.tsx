@@ -340,7 +340,7 @@ export default function OrdersPage() {
   })
 
   const totalRevenue = orders
-    .filter((o) => o.status === 'paid')
+    .filter((o) => o.status === 'paid' || o.status === 'shipped')
     .reduce((s, o) => s + o.amount, 0)
 
   const pendingCount = orders.filter((o) => o.status === 'pending').length

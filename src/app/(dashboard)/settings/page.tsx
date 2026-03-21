@@ -1,7 +1,7 @@
 'use client'
 
 // OrdrX — Settings Page
-// Edit profile + upload logo + custom badges
+// Edit profile + logo + badges + theme color + background
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -24,20 +24,36 @@ const inputCls = [
 const labelCls =
   'block text-xs font-semibold uppercase tracking-wide mb-1.5 text-gray-500 dark:text-gray-400'
 
-// ── Suggested badges ───────────────────────────────────────
+// ── Theme colors ───────────────────────────────────────────
+const THEME_COLORS = [
+  { name: 'Gold',    value: '#b5860d' },
+  { name: 'Purple',  value: '#7c4dca' },
+  { name: 'Pink',    value: '#d4478a' },
+  { name: 'Green',   value: '#1a8a6e' },
+  { name: 'Orange',  value: '#e05c2a' },
+  { name: 'Blue',    value: '#4e8ef7' },
+  { name: 'Red',     value: '#e53935' },
+  { name: 'Teal',    value: '#00897b' },
+  { name: 'Indigo',  value: '#3949ab' },
+  { name: 'Rose',    value: '#e91e63' },
+  { name: 'Amber',   value: '#f59e0b' },
+  { name: 'Emerald', value: '#10b981' },
+]
+
+// ── Background options ─────────────────────────────────────
+const BG_OPTIONS = [
+  { name: 'Gradient',  value: 'gradient', preview: 'bg-gradient-to-br from-amber-400 to-amber-600' },
+  { name: 'Solid',     value: 'solid',    preview: 'bg-amber-500' },
+  { name: 'Dark',      value: 'dark',     preview: 'bg-gray-900' },
+  { name: 'Soft',      value: 'soft',     preview: 'bg-amber-50' },
+]
+
+// ── Badge suggestions ──────────────────────────────────────
 const BADGE_SUGGESTIONS = [
-  '🌿 Alcohol Free',
-  '🐰 Cruelty Free',
-  '🌱 Vegan',
-  '🏠 Homemade',
-  '✋ Handcrafted',
-  '🚚 Free Delivery',
-  '💵 COD Available',
-  '⭐ Premium Quality',
-  '🎁 Gift Wrapping',
-  '♻️ Eco Friendly',
-  '🌸 Natural',
-  '💯 Authentic',
+  '🌿 Alcohol Free', '🐰 Cruelty Free', '🌱 Vegan',
+  '🏠 Homemade', '✋ Handcrafted', '🚚 Free Delivery',
+  '💵 COD Available', '⭐ Premium Quality', '🎁 Gift Wrapping',
+  '♻️ Eco Friendly', '🌸 Natural', '💯 Authentic',
 ]
 
 // ── Section wrapper ────────────────────────────────────────
@@ -74,6 +90,8 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [badges,      setBadges]      = useState<string[]>([])
   const [customBadge, setCustomBadge] = useState('')
+  const [themeColor,  setThemeColor]  = useState('#b5860d')
+  const [themeBg,     setThemeBg]     = useState('gradient')
 
   // ── Fetch ──────────────────────────────────────────────
   const fetchBusiness = useCallback(async () => {
@@ -90,14 +108,16 @@ export default function SettingsPage() {
     if (!biz) { router.push('/onboarding'); return }
 
     setBusiness(biz)
-    setName(biz.name         ?? '')
-    setBio(biz.bio           ?? '')
-    setWhatsapp(biz.whatsapp ?? '')
-    setEmail(biz.email       ?? '')
-    setType(biz.type         ?? 'perfume')
-    setLogoUrl(biz.logo_url  ?? null)
+    setName(biz.name          ?? '')
+    setBio(biz.bio            ?? '')
+    setWhatsapp(biz.whatsapp  ?? '')
+    setEmail(biz.email        ?? '')
+    setType(biz.type          ?? 'perfume')
+    setLogoUrl(biz.logo_url   ?? null)
     setLogoPreview(biz.logo_url ?? null)
-    setBadges(biz.badges     ?? [])
+    setBadges(biz.badges      ?? [])
+    setThemeColor(biz.theme_color ?? '#b5860d')
+    setThemeBg(biz.theme_bg   ?? 'gradient')
     setLoading(false)
   }, [supabase, router])
 
@@ -108,7 +128,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) { setError('Please select an image.'); return }
-    if (file.size > 5 * 1024 * 1024)    { setError('Logo must be under 5MB.'); return }
+    if (file.size > 5 * 1024 * 1024) { setError('Logo must be under 5MB.'); return }
 
     setLogoPreview(URL.createObjectURL(file))
     setUploading(true)
@@ -139,9 +159,7 @@ export default function SettingsPage() {
     setBadges((prev) =>
       prev.includes(badge)
         ? prev.filter((b) => b !== badge)
-        : prev.length < 5
-          ? [...prev, badge]
-          : prev
+        : prev.length < 5 ? [...prev, badge] : prev
     )
   }
 
@@ -165,13 +183,15 @@ export default function SettingsPage() {
     const { error: updateError } = await supabase
       .from('businesses')
       .update({
-        name:     name.trim(),
-        bio:      bio.trim()      || null,
-        whatsapp: whatsapp.trim() || null,
-        email:    email.trim()    || null,
+        name:        name.trim(),
+        bio:         bio.trim()      || null,
+        whatsapp:    whatsapp.trim() || null,
+        email:       email.trim()    || null,
         type,
-        logo_url: logoUrl,
+        logo_url:    logoUrl,
         badges,
+        theme_color: themeColor,
+        theme_bg:    themeBg,
       })
       .eq('id', business.id)
 
@@ -193,6 +213,19 @@ export default function SettingsPage() {
     router.refresh()
   }
 
+  // ── Preview header ─────────────────────────────────────
+  const getHeaderStyle = () => {
+    if (themeBg === 'gradient') {
+      return {
+        background: `linear-gradient(160deg, ${themeColor}ee, ${themeColor}99)`,
+      }
+    }
+    if (themeBg === 'solid') return { background: themeColor }
+    if (themeBg === 'dark')  return { background: '#1a1a2e' }
+    if (themeBg === 'soft')  return { background: `${themeColor}22` }
+    return { background: `linear-gradient(160deg, ${themeColor}ee, ${themeColor}99)` }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[#fdf6ef] dark:bg-gray-950
@@ -211,7 +244,9 @@ export default function SettingsPage() {
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">⚙️ Settings</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Update your store profile</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Update your store profile
+          </p>
         </div>
 
         {error && (
@@ -227,7 +262,7 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
 
-          {/* Store Info */}
+          {/* ── Store Info ── */}
           <Section title="🏪 Store Information">
 
             {/* Store link */}
@@ -327,19 +362,123 @@ export default function SettingsPage() {
             </div>
           </Section>
 
+          {/* ── Theme ── */}
+          <Section title="🎨 Store Theme">
+
+            {/* Live preview */}
+            <div>
+              <label className={labelCls}>Preview</label>
+              <div className="rounded-2xl overflow-hidden h-24 relative"
+                style={getHeaderStyle()}>
+                <div className="absolute inset-0 flex flex-col items-center
+                  justify-center text-white">
+                  <div className="w-10 h-10 rounded-full bg-white/20
+                    flex items-center justify-center text-xl mb-1">
+                    {logoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoPreview} alt="logo"
+                        className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      BUSINESS_TYPE_CONFIG[type].emoji
+                    )}
+                  </div>
+                  <p className="text-sm font-bold">{name || 'Your Store'}</p>
+                  <p className="text-xs opacity-70">@{business?.slug}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Color picker */}
+            <div>
+              <label className={labelCls}>Brand Color</label>
+              <div className="flex flex-wrap gap-2">
+                {THEME_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setThemeColor(c.value)}
+                    title={c.name}
+                    className={cn(
+                      'w-9 h-9 rounded-full transition-all',
+                      themeColor === c.value
+                        ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                        : 'hover:scale-105',
+                    )}
+                    style={{ background: c.value }}
+                  />
+                ))}
+
+                {/* Custom color input */}
+                <div className="relative">
+                  <input
+                    type="color"
+                    value={themeColor}
+                    onChange={(e) => setThemeColor(e.target.value)}
+                    className="w-9 h-9 rounded-full cursor-pointer border-2
+                      border-gray-200 dark:border-gray-700"
+                    title="Custom color"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Current: <span className="font-bold" style={{ color: themeColor }}>
+                  {themeColor}
+                </span>
+              </p>
+            </div>
+
+            {/* Background style */}
+            <div>
+              <label className={labelCls}>Header Background</label>
+              <div className="grid grid-cols-4 gap-2">
+                {BG_OPTIONS.map((bg) => (
+                  <button
+                    key={bg.value}
+                    type="button"
+                    onClick={() => setThemeBg(bg.value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 p-2 rounded-xl',
+                      'border-2 transition-all',
+                      themeBg === bg.value
+                        ? 'border-[#b5860d]'
+                        : 'border-gray-100 dark:border-gray-700',
+                    )}
+                  >
+                    <div
+                      className="w-full h-8 rounded-lg"
+                      style={
+                        bg.value === 'gradient'
+                          ? { background: `linear-gradient(135deg, ${themeColor}ee, ${themeColor}77)` }
+                          : bg.value === 'solid'
+                          ? { background: themeColor }
+                          : bg.value === 'dark'
+                          ? { background: '#1a1a2e' }
+                          : { background: `${themeColor}22` }
+                      }
+                    />
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {bg.name}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </Section>
+
           {/* ── Badges ── */}
           <Section title="🏷️ Store Badges">
             <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-              Add up to 5 badges shown on your storefront. Builds customer trust!
+              Up to 5 badges shown on your storefront
             </p>
 
-            {/* Selected badges */}
             {badges.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {badges.map((b) => (
                   <span key={b}
-                    className="flex items-center gap-1.5 bg-[#fdf6ef] dark:bg-gray-800
-                      text-[#b5860d] text-xs font-semibold px-3 py-1.5 rounded-full">
+                    className="flex items-center gap-1.5 text-xs font-semibold
+                      px-3 py-1.5 rounded-full"
+                    style={{ background: `${themeColor}20`, color: themeColor }}>
                     {b}
                     <button type="button" onClick={() => toggleBadge(b)}
                       className="hover:text-red-500">×</button>
@@ -348,28 +487,22 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Suggestions */}
-            <div>
-              <p className="text-xs text-gray-400 mb-2">
-                Quick add ({badges.length}/5 selected):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BADGE_SUGGESTIONS.map((b) => (
-                  <button key={b} type="button" onClick={() => toggleBadge(b)}
-                    className={cn(
-                      'text-xs px-3 py-1.5 rounded-full border transition-colors',
-                      badges.includes(b)
-                        ? 'bg-[#b5860d] text-white border-[#b5860d]'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]',
-                      badges.length >= 5 && !badges.includes(b) && 'opacity-40 cursor-not-allowed',
-                    )}>
-                    {b}
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {BADGE_SUGGESTIONS.map((b) => (
+                <button key={b} type="button" onClick={() => toggleBadge(b)}
+                  className={cn(
+                    'text-xs px-3 py-1.5 rounded-full border transition-colors',
+                    badges.includes(b)
+                      ? 'text-white border-transparent'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[#b5860d]',
+                    badges.length >= 5 && !badges.includes(b) && 'opacity-40 cursor-not-allowed',
+                  )}
+                  style={badges.includes(b) ? { background: themeColor } : {}}>
+                  {b}
+                </button>
+              ))}
             </div>
 
-            {/* Custom badge */}
             <div className="flex gap-2">
               <input type="text" value={customBadge}
                 onChange={(e) => setCustomBadge(e.target.value)}
@@ -378,14 +511,13 @@ export default function SettingsPage() {
                 disabled={badges.length >= 5}
                 className={inputCls + ' flex-1'} />
               <Button variant="secondary" size="md" type="button"
-                onClick={addCustomBadge}
-                disabled={badges.length >= 5}>
+                onClick={addCustomBadge} disabled={badges.length >= 5}>
                 Add
               </Button>
             </div>
           </Section>
 
-          {/* Contact */}
+          {/* ── Contact ── */}
           <Section title="📱 Contact Details">
             <div>
               <label className={labelCls}>WhatsApp Number</label>
@@ -404,10 +536,10 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* Store link */}
+          {/* ── Store link ── */}
           <Section title="🔗 Your Store Link">
             <div className="text-center py-2">
-              <p className="text-2xl font-bold text-[#b5860d] mb-2">
+              <p className="text-2xl font-bold mb-2" style={{ color: themeColor }}>
                 ordrx.in/{business?.slug}
               </p>
               <p className="text-xs text-gray-400 mb-4">
@@ -430,18 +562,22 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* Save */}
+          {/* ── Save ── */}
           <Button variant="primary" size="lg" type="button"
             onClick={handleSave} loading={saving || uploading} className="w-full">
             💾 Save Changes
           </Button>
 
-          {/* Account */}
+          {/* ── Account ── */}
           <Section title="⚠️ Account">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Sign out</p>
-                <p className="text-xs text-gray-400 mt-0.5">Sign out of your OrdrX account</p>
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Sign out
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Sign out of your OrdrX account
+                </p>
               </div>
               <Button variant="danger" size="sm" type="button" onClick={signOut}>
                 Sign Out

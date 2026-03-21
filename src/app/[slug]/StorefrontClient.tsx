@@ -1,7 +1,7 @@
 'use client'
 
-// OrdrX — Storefront Client Component
-// Shows logo, custom badges, real product photos
+// OrdrX — Storefront Client
+// Dynamic theme color + background from seller settings
 
 import { useState } from 'react'
 import { Business, Product, BusinessType } from '@/types'
@@ -24,7 +24,6 @@ interface OrderForm {
 interface ProductItemProps {
   product:  Product
   color:    string
-  badge:    string | null
   onSelect: (p: Product) => void
 }
 
@@ -37,6 +36,21 @@ const formatPrice = (paise: number): string =>
 const getDiscount = (price: number, mrp: number | null): number | null => {
   if (!mrp || mrp <= 0 || mrp <= price) return null
   return Math.round((1 - price / mrp) * 100)
+}
+
+// ── Get header style based on theme_bg ────────────────────
+const getHeaderStyle = (color: string, bg: string): React.CSSProperties => {
+  if (bg === 'solid')    return { background: color }
+  if (bg === 'dark')     return { background: '#1a1a2e' }
+  if (bg === 'soft')     return { background: `${color}22`, }
+  // default: gradient
+  return { background: `linear-gradient(160deg, ${color}ee, ${color}99)` }
+}
+
+// ── Get text color based on bg ─────────────────────────────
+const getTextColor = (bg: string, color: string): string => {
+  if (bg === 'soft') return color
+  return '#ffffff'
 }
 
 // ── Product Thumbnail ──────────────────────────────────────
@@ -80,7 +94,7 @@ function StoreAvatar({ logoUrl, name, emoji }: {
 }
 
 // ── Product Item ───────────────────────────────────────────
-function ProductItem({ product, color, badge, onSelect }: ProductItemProps) {
+function ProductItem({ product, color, onSelect }: ProductItemProps) {
   const discount = getDiscount(product.price, product.mrp ?? null)
 
   return (
@@ -147,6 +161,14 @@ function ProductItem({ product, color, badge, onSelect }: ProductItemProps) {
 export function StorefrontClient({ business, products }: StorefrontClientProps) {
   const config = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
 
+  // Use seller's custom theme color or fallback to business type color
+  const color  = business.theme_color || config.color
+  const bg     = (business as Business & { theme_bg?: string }).theme_bg || 'gradient'
+
+  const headerStyle = getHeaderStyle(color, bg)
+  const textColor   = getTextColor(bg, color)
+  const isLight     = bg === 'soft'
+
   const [screen,   setScreen]   = useState<Screen>('shop')
   const [selected, setSelected] = useState<Product | null>(null)
   const [orderRef, setOrderRef] = useState('')
@@ -168,7 +190,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setScreen('detail')
   }
 
-  // ── Place order via API ───────────────────────────────────
+  // ── Place order ───────────────────────────────────────────
   const placeOrder = async () => {
     if (!selected) return
     if (!form.customerName.trim() || !form.customerPhone.trim()) {
@@ -183,7 +205,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
       const response = await fetch('/api/orders', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
+        body: JSON.stringify({
           business_id:    business.id,
           customer_name:  form.customerName.trim(),
           customer_phone: form.customerPhone.trim(),
@@ -219,25 +241,27 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     'border-gray-200 dark:border-gray-700',
   ].join(' ')
 
-  // ── Render ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div
         className="px-4 pt-10 pb-6 text-center relative overflow-hidden"
-        style={{ background: `linear-gradient(160deg, ${config.color}ee, ${config.color}99)` }}
+        style={headerStyle}
       >
         {(screen === 'detail' || screen === 'checkout') && (
           <button type="button" aria-label="Go back"
             onClick={() => setScreen(screen === 'checkout' ? 'detail' : 'shop')}
-            className="absolute left-4 top-4 text-white text-2xl font-light">
+            className="absolute left-4 top-4 text-2xl font-light"
+            style={{ color: textColor }}>
             ←
           </button>
         )}
 
+        {/* Logo */}
         <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3
-          border-2 border-white/30 bg-white/20">
+          border-2 bg-white/20"
+          style={{ borderColor: `${textColor}44` }}>
           <StoreAvatar
             logoUrl={business.logo_url ?? null}
             name={business.name}
@@ -245,34 +269,52 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
           />
         </div>
 
-        <h1 className="text-xl font-bold text-white mb-1">{business.name}</h1>
-        <p className="text-sm text-white/70 mb-2">@{business.slug}</p>
+        <h1 className="text-xl font-bold mb-1" style={{ color: textColor }}>
+          {business.name}
+        </h1>
+        <p className="text-sm mb-2" style={{ color: `${textColor}99` }}>
+          @{business.slug}
+        </p>
 
         {business.bio && (
-          <p className="text-sm text-white/80 max-w-xs mx-auto mb-3">{business.bio}</p>
+          <p className="text-sm max-w-xs mx-auto mb-3" style={{ color: `${textColor}cc` }}>
+            {business.bio}
+          </p>
         )}
 
-        {/* Badges — custom first, then defaults */}
+        {/* Badges */}
         <div className="flex justify-center gap-2 flex-wrap">
           {(business.badges && business.badges.length > 0
             ? business.badges
             : config.badge ? [config.badge] : []
           ).map((badge) => (
             <span key={badge}
-              className="text-xs bg-white/20 text-white px-3 py-1 rounded-full">
+              className="text-xs px-3 py-1 rounded-full"
+              style={{
+                background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
+                color: isLight ? color : '#fff',
+              }}>
               {badge}
             </span>
           ))}
-          <span className="text-xs bg-white/20 text-white px-3 py-1 rounded-full">
+          <span className="text-xs px-3 py-1 rounded-full"
+            style={{
+              background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
+              color: isLight ? color : '#fff',
+            }}>
             💬 WhatsApp orders
           </span>
-          <span className="text-xs bg-white/20 text-white px-3 py-1 rounded-full">
+          <span className="text-xs px-3 py-1 rounded-full"
+            style={{
+              background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
+              color: isLight ? color : '#fff',
+            }}>
             🚚 Ships India
           </span>
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       <div className="max-w-md mx-auto px-4 py-6">
 
         {/* Shop */}
@@ -289,9 +331,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {products.map((p) => (
-                  <ProductItem key={p.id} product={p}
-                    color={config.color} badge={config.badge}
-                    onSelect={selectProduct} />
+                  <ProductItem key={p.id} product={p} color={color} onSelect={selectProduct} />
                 ))}
               </div>
             )}
@@ -299,8 +339,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 mt-6
-                  bg-[#25D366] hover:bg-[#20b858] text-white
-                  rounded-2xl py-3 font-bold text-sm transition-colors">
+                  bg-[#25D366] text-white rounded-2xl py-3 font-bold text-sm">
                 💬 Chat on WhatsApp
               </a>
             )}
@@ -311,14 +350,15 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {screen === 'detail' && selected && (
           <div>
             <div className="h-56 rounded-2xl overflow-hidden mb-4"
-              style={{ background: `${config.color}15` }}>
+              style={{ background: `${color}15` }}>
               <ProductThumbnail
                 photoUrl={selected.photo_url ?? null}
                 emoji={selected.emoji}
                 name={selected.name}
-                color={config.color}
+                color={color}
               />
             </div>
+
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
               {selected.name}
             </h2>
@@ -335,9 +375,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                     <button key={v} type="button" onClick={() => update('variant', v)}
                       className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
                       style={{
-                        background:  form.variant === v ? config.color : 'transparent',
-                        color:       form.variant === v ? '#fff' : config.color,
-                        borderColor: config.color,
+                        background:  form.variant === v ? color : 'transparent',
+                        color:       form.variant === v ? '#fff' : color,
+                        borderColor: color,
                       }}>
                       {v}
                     </button>
@@ -354,7 +394,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                   onClick={() => update('quantity', Math.max(1, form.quantity - 1))}
                   className="w-10 h-10 rounded-full border-2 text-lg font-bold
                     flex items-center justify-center"
-                  style={{ borderColor: config.color, color: config.color }}>−</button>
+                  style={{ borderColor: color, color }}>−</button>
                 <span className="text-xl font-bold text-gray-900 dark:text-white min-w-8 text-center">
                   {form.quantity}
                 </span>
@@ -362,14 +402,14 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                   onClick={() => update('quantity', Math.min(selected.stock, form.quantity + 1))}
                   className="w-10 h-10 rounded-full text-white text-lg font-bold
                     flex items-center justify-center"
-                  style={{ background: config.color }}>+</button>
+                  style={{ background: color }}>+</button>
               </div>
             </div>
 
             <div className="rounded-2xl p-4 mb-6 flex justify-between items-center"
-              style={{ background: `${config.color}15` }}>
-              <span className="text-sm text-gray-600">Total</span>
-              <span className="text-2xl font-bold" style={{ color: config.color }}>
+              style={{ background: `${color}15` }}>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Total</span>
+              <span className="text-2xl font-bold" style={{ color }}>
                 {formatPrice(totalAmount)}
               </span>
             </div>
@@ -377,7 +417,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             <button type="button" onClick={() => setScreen('checkout')}
               className="w-full py-4 rounded-2xl text-white text-base font-bold
                 transition-all active:scale-[0.98]"
-              style={{ background: config.color }}>
+              style={{ background: color }}>
               Order Now →
             </button>
           </div>
@@ -394,13 +434,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             </p>
 
             <div className="rounded-2xl p-4 mb-6 flex items-center gap-3"
-              style={{ background: `${config.color}15` }}>
+              style={{ background: `${color}15` }}>
               <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
                 <ProductThumbnail
                   photoUrl={selected.photo_url ?? null}
                   emoji={selected.emoji}
                   name={selected.name}
-                  color={config.color}
+                  color={color}
                 />
               </div>
               <div className="flex-1 min-w-0">
@@ -411,7 +451,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                   <p className="text-xs text-gray-500">{form.variant} × {form.quantity}</p>
                 )}
               </div>
-              <span className="text-base font-bold flex-shrink-0" style={{ color: config.color }}>
+              <span className="text-base font-bold flex-shrink-0" style={{ color }}>
                 {formatPrice(totalAmount)}
               </span>
             </div>
@@ -442,7 +482,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             <button type="button" onClick={placeOrder} disabled={loading}
               className="w-full py-4 rounded-2xl text-white text-base font-bold
                 transition-all disabled:opacity-50 active:scale-[0.98]"
-              style={{ background: config.color }}>
+              style={{ background: color }}>
               {loading ? 'Placing order...' : `Confirm Order — ${formatPrice(totalAmount)}`}
             </button>
 
@@ -456,7 +496,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {screen === 'confirmed' && selected && (
           <div className="text-center">
             <div className="w-20 h-20 rounded-full flex items-center justify-center
-              text-4xl mx-auto mb-4" style={{ background: `${config.color}20` }}>
+              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>
               ✅
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -469,13 +509,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             <div className="bg-white dark:bg-gray-900 rounded-2xl border
               border-gray-100 dark:border-gray-800 p-4 text-left mb-4">
               {([
-                ['Order Ref',  orderRef],
-                ['Product',    selected.name],
-                ['Variant',    form.variant || '—'],
-                ['Quantity',   String(form.quantity)],
-                ['Amount',     formatPrice(totalAmount)],
-                ['Your Name',  form.customerName],
-                ['WhatsApp',   form.customerPhone],
+                ['Order Ref', orderRef],
+                ['Product',   selected.name],
+                ['Variant',   form.variant || '—'],
+                ['Quantity',  String(form.quantity)],
+                ['Amount',    formatPrice(totalAmount)],
+                ['Your Name', form.customerName],
+                ['WhatsApp',  form.customerPhone],
               ] as [string, string][]).map(([label, value]) => (
                 <div key={label} className="flex justify-between py-2 border-b
                   border-gray-100 dark:border-gray-800 last:border-0">
@@ -496,10 +536,11 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
             <button type="button"
               onClick={() => {
-                setScreen('shop'); setSelected(null)
+                setScreen('shop')
+                setSelected(null)
                 setForm({ customerName: '', customerPhone: '', variant: '', quantity: 1, note: '' })
               }}
-              className="text-sm font-semibold" style={{ color: config.color }}>
+              className="text-sm font-semibold" style={{ color }}>
               ← Back to shop
             </button>
           </div>

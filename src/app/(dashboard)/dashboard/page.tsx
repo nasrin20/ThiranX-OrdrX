@@ -58,7 +58,7 @@ const buildChartData = (
       return {
         day: `${d.getDate()}/${d.getMonth() + 1}`,
         revenue: orders
-          .filter((o) => o.status === 'paid' && o.created_at.startsWith(dateStr))
+          .filter((o) => (o.status === 'paid' || o.status === 'shipped') && o.created_at.startsWith(dateStr))
           .reduce((s, o) => s + o.amount, 0),
       }
     })

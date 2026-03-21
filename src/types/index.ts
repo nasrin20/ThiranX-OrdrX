@@ -35,6 +35,7 @@ export interface Business {
   slug:        string
   type:        BusinessType
   theme_color: string
+  theme_bg:    string
   logo_url:    string | null
   whatsapp:    string | null
   email:       string | null
