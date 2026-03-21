@@ -1,5 +1,5 @@
 // OrdrX — Secure Orders API Route
-// Uses service role + sends email notification to seller
+// Supports multiple cart items in one order
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,14 +12,19 @@ const supabaseAdmin = createClient(
 )
 
 // ── Types ──────────────────────────────────────────────────
+interface CartItemRequest {
+  product_id: string
+  variant:    string | null
+  quantity:   number
+  price:      number
+}
+
 interface OrderRequest {
   business_id:    string
   customer_name:  string
   customer_phone: string
-  product_id:     string
-  variant:        string | null
-  quantity:       number
-  amount:         number
+  items:          CartItemRequest[]
+  total_amount:   number
   notes:          string | null
 }
 
@@ -36,15 +41,13 @@ export async function POST(req: NextRequest) {
       business_id,
       customer_name,
       customer_phone,
-      product_id,
-      variant,
-      quantity,
-      amount,
+      items,
+      total_amount,
       notes,
     } = body
 
     // ── Validate ───────────────────────────────────────────
-    if (!business_id || !customer_name || !customer_phone || !product_id) {
+    if (!business_id || !customer_name || !customer_phone || !items?.length) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -67,38 +70,43 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Get seller email ───────────────────────────────────
-    // Priority 1: email set in settings
-    // Priority 2: email used to sign up
     let sellerEmail: string | null = business.email ?? null
-
     if (!sellerEmail && business.user_id) {
       const { data: { user } } = await supabaseAdmin
         .auth.admin.getUserById(business.user_id)
       sellerEmail = user?.email ?? null
     }
 
-    console.log('Sending order email to:', sellerEmail)
-
-    // ── Verify product ─────────────────────────────────────
-    const { data: product, error: prodError } = await supabaseAdmin
+    // ── Verify all products + check stock ──────────────────
+    const productIds = items.map((i) => i.product_id)
+    const { data: products, error: prodError } = await supabaseAdmin
       .from('products')
-      .select('id, name, stock, active')
-      .eq('id', product_id)
+      .select('id, name, stock, active, price')
+      .in('id', productIds)
       .eq('active', true)
-      .single()
 
-    if (prodError || !product) {
+    if (prodError || !products || products.length !== items.length) {
       return NextResponse.json(
-        { error: 'Product not found or unavailable' },
+        { error: 'One or more products not found' },
         { status: 404 }
       )
     }
 
-    if (product.stock < quantity) {
-      return NextResponse.json(
-        { error: 'Not enough stock' },
-        { status: 400 }
-      )
+    // Check stock for each item
+    for (const item of items) {
+      const product = products.find((p) => p.id === item.product_id)
+      if (!product) {
+        return NextResponse.json(
+          { error: `Product not found` },
+          { status: 404 }
+        )
+      }
+      if (product.stock < item.quantity) {
+        return NextResponse.json(
+          { error: `Not enough stock for ${product.name}` },
+          { status: 400 }
+        )
+      }
     }
 
     // ── Upsert customer ────────────────────────────────────
@@ -125,16 +133,19 @@ export async function POST(req: NextRequest) {
     // ── Create order ───────────────────────────────────────
     const ref = generateRef()
 
+    // Use first item as primary product for backward compat
+    const firstItem = items[0]
+
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
         business_id,
         customer_id: customer.id,
         order_ref:   ref,
-        product_id,
-        variant:     variant || null,
-        quantity,
-        amount,
+        product_id:  firstItem.product_id,
+        variant:     firstItem.variant || null,
+        quantity:    items.reduce((s, i) => s + i.quantity, 0),
+        amount:      total_amount,
         status:      'pending',
         notes:       notes?.trim() || null,
       })
@@ -148,24 +159,49 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Reduce stock ───────────────────────────────────────
+    // ── Create order items ─────────────────────────────────
+    const orderItems = items.map((item) => ({
+      order_id:   order.id,
+      product_id: item.product_id,
+      variant:    item.variant || null,
+      quantity:   item.quantity,
+      price:      item.price,
+    }))
+
     await supabaseAdmin
-      .from('products')
-      .update({ stock: product.stock - quantity })
-      .eq('id', product_id)
+      .from('order_items')
+      .insert(orderItems)
+
+    // ── Reduce stock for all items ─────────────────────────
+    for (const item of items) {
+      const product = products.find((p) => p.id === item.product_id)
+      if (product) {
+        await supabaseAdmin
+          .from('products')
+          .update({ stock: product.stock - item.quantity })
+          .eq('id', item.product_id)
+      }
+    }
 
     // ── Send email to seller ───────────────────────────────
     if (sellerEmail) {
+      const itemSummary = items
+        .map((item) => {
+          const p = products.find((pr) => pr.id === item.product_id)
+          return `${p?.name ?? 'Product'}${item.variant ? ` (${item.variant})` : ''} x${item.quantity}`
+        })
+        .join(', ')
+
       sendNewOrderEmail({
         sellerEmail,
         sellerName:    business.name,
         sellerSlug:    business.slug,
         customerName:  customer_name.trim(),
         customerPhone: customer_phone.trim(),
-        productName:   product.name,
-        variant:       variant || null,
-        quantity,
-        amount,
+        productName:   itemSummary,
+        variant:       null,
+        quantity:      items.reduce((s, i) => s + i.quantity, 0),
+        amount:        total_amount,
         orderRef:      ref,
         notes:         notes?.trim() || null,
       }).catch(console.error)

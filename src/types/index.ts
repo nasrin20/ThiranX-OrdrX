@@ -63,6 +63,13 @@ export interface Product {
   created_at:  string
 }
 
+// -- Cart Item
+export interface CartItem {
+  product:  Product
+  variant:  string
+  quantity: number
+}
+
 // -- Customer
 export interface Customer {
   id:               string
@@ -90,6 +97,17 @@ export interface Order {
   whatsapp_sent: boolean
   notes:         string | null
   created_at:    string
+}
+
+// -- Order Item
+export interface OrderItem {
+  id:         string
+  order_id:   string
+  product_id: string
+  variant:    string | null
+  quantity:   number
+  price:      number
+  created_at: string
 }
 
 // -- Order with joined data
