@@ -1,12 +1,11 @@
 'use client'
 
 // OrdrX — Storefront Client Component
-// Shows real product photos, fixes MRP display bug
+// Shows real product photos, logo, fixes WhatsApp number
 
 import { useState } from 'react'
 import { Business, Product, BusinessType } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
-import { createClient } from '@/lib/supabase'
 
 // ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
@@ -38,7 +37,6 @@ const generateRef = (): string =>
 const formatPrice = (paise: number): string =>
   `₹${(paise / 100).toLocaleString('en-IN')}`
 
-// Returns discount % only when MRP is valid and greater than price
 const getDiscount = (price: number, mrp: number | null): number | null => {
   if (!mrp || mrp <= 0 || mrp <= price) return null
   return Math.round((1 - price / mrp) * 100)
@@ -50,13 +48,11 @@ function ProductThumbnail({
   emoji,
   name,
   color,
-  large = false,
 }: {
   photoUrl: string | null
   emoji:    string
   name:     string
   color:    string
-  large?:   boolean
 }) {
   if (photoUrl) {
     return (
@@ -64,20 +60,43 @@ function ProductThumbnail({
       <img
         src={photoUrl}
         alt={name}
-        className={large
-          ? 'w-full h-full object-cover'
-          : 'w-full h-full object-cover'
-        }
+        className="w-full h-full object-cover"
       />
     )
   }
-
   return (
     <div
       className="w-full h-full flex items-center justify-center"
       style={{ background: `${color}15` }}
     >
-      <span className={large ? 'text-7xl' : 'text-4xl'}>{emoji}</span>
+      <span className="text-4xl">{emoji}</span>
+    </div>
+  )
+}
+
+// ── Store Avatar ───────────────────────────────────────────
+function StoreAvatar({
+  logoUrl,
+  name,
+  emoji,
+}: {
+  logoUrl: string | null
+  name:    string
+  emoji:   string
+}) {
+  if (logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt={name}
+        className="w-full h-full object-cover"
+      />
+    )
+  }
+  return (
+    <div className="w-full h-full flex items-center justify-center text-3xl">
+      {emoji}
     </div>
   )
 }
@@ -91,12 +110,11 @@ function ProductItem({ product, color, badge, onSelect }: ProductItemProps) {
       onClick={() => onSelect(product)}
       className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden
         cursor-pointer hover:shadow-lg transition-all active:scale-[0.98]
-        border-2 border-transparent hover:border-current"
-      style={{ '--hover-color': color } as React.CSSProperties}
+        border-2 border-transparent"
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = color)}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'transparent')}
     >
-      {/* Image / Emoji area */}
+      {/* Image */}
       <div className="h-36 relative overflow-hidden"
         style={{ background: `${color}15` }}>
         <ProductThumbnail
@@ -129,7 +147,6 @@ function ProductItem({ product, color, badge, onSelect }: ProductItemProps) {
           </p>
         )}
 
-        {/* Variants */}
         {product.variants.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {product.variants.slice(0, 2).map((v) => (
@@ -147,7 +164,6 @@ function ProductItem({ product, color, badge, onSelect }: ProductItemProps) {
           </div>
         )}
 
-        {/* Price */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-bold" style={{ color }}>
             {formatPrice(product.price)}
@@ -170,8 +186,7 @@ function ProductItem({ product, color, badge, onSelect }: ProductItemProps) {
 
 // ── Main Component ─────────────────────────────────────────
 export function StorefrontClient({ business, products }: StorefrontClientProps) {
-  const supabase = createClient()
-  const config   = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
+  const config = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
 
   const [screen,   setScreen]   = useState<Screen>('shop')
   const [selected, setSelected] = useState<Product | null>(null)
@@ -203,10 +218,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setScreen('detail')
   }
 
-  // ── Place order ───────────────────────────────────────────
-  // ── REPLACE the placeOrder function in StorefrontClient.tsx ──
-// Find the existing placeOrder function and replace with this:
-
+  // ── Place order via API ───────────────────────────────────
   const placeOrder = async () => {
     if (!selected) return
 
@@ -220,9 +232,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
     try {
       const response = await fetch('/api/orders', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body:    JSON.stringify({
           business_id:    business.id,
           customer_name:  form.customerName.trim(),
           customer_phone: form.customerPhone.trim(),
@@ -251,6 +263,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
     setLoading(false)
   }
+
   // ── Input class ───────────────────────────────────────────
   const inputCls = [
     'w-full px-4 py-3 rounded-xl border text-sm',
@@ -258,7 +271,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     'text-gray-900 bg-white placeholder-gray-400',
     'dark:text-gray-100 dark:bg-gray-800 dark:placeholder-gray-500',
     'border-gray-200 dark:border-gray-700',
-    `focus:border-[${config.color}]`,
   ].join(' ')
 
   // ── Render ────────────────────────────────────────────────
@@ -281,9 +293,14 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
           </button>
         )}
 
-        <div className="w-16 h-16 rounded-full bg-white/20 flex items-center
-          justify-center text-3xl mx-auto mb-3">
-          {config.emoji}
+        {/* Store logo / avatar */}
+        <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3
+          border-2 border-white/30 bg-white/20">
+          <StoreAvatar
+            logoUrl={business.logo_url ?? null}
+            name={business.name}
+            emoji={config.emoji}
+          />
         </div>
 
         <h1 className="text-xl font-bold text-white mb-1">{business.name}</h1>
@@ -360,7 +377,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {/* ── DETAIL ── */}
         {screen === 'detail' && selected && (
           <div>
-            {/* Product image */}
             <div className="h-56 rounded-2xl overflow-hidden mb-4"
               style={{ background: `${config.color}15` }}>
               <ProductThumbnail
@@ -368,7 +384,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 emoji={selected.emoji}
                 name={selected.name}
                 color={config.color}
-                large
               />
             </div>
 
@@ -382,7 +397,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </p>
             )}
 
-            {/* Variant selector */}
             {selected.variants.length > 0 && (
               <div className="mb-4">
                 <label className="block text-xs font-semibold uppercase
@@ -410,7 +424,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </div>
             )}
 
-            {/* Quantity */}
             <div className="mb-4">
               <label className="block text-xs font-semibold uppercase
                 tracking-wide text-gray-500 dark:text-gray-400 mb-2">
@@ -444,7 +457,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </div>
             </div>
 
-            {/* Total */}
             <div
               className="rounded-2xl p-4 mb-6 flex justify-between items-center"
               style={{ background: `${config.color}15` }}
@@ -477,13 +489,11 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               Order confirmation sent to your WhatsApp
             </p>
 
-            {/* Summary */}
             <div
               className="rounded-2xl p-4 mb-6 flex items-center gap-3"
               style={{ background: `${config.color}15` }}
             >
-              <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
-                style={{ background: `${config.color}15` }}>
+              <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
                 <ProductThumbnail
                   photoUrl={selected.photo_url ?? null}
                   emoji={selected.emoji}
@@ -523,16 +533,18 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 placeholder="Your full name"
                 className={inputCls}
               />
-              <input
-                type="tel"
-                value={form.customerPhone}
-                onChange={(e) => update('customerPhone', e.target.value)}
-                placeholder="WhatsApp number"
-                className={inputCls}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Include country code e.g. +91 for India
+              <div>
+                <input
+                  type="tel"
+                  value={form.customerPhone}
+                  onChange={(e) => update('customerPhone', e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className={inputCls}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Include country code e.g. +91 for India
                 </p>
+              </div>
               <textarea
                 value={form.note}
                 onChange={(e) => update('note', e.target.value)}
@@ -579,10 +591,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               {business.name} will contact you on WhatsApp soon.
             </p>
 
-            {/* Receipt */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl border
               border-gray-100 dark:border-gray-800 p-4 text-left mb-4">
-              {[
+              {([
                 ['Order Ref',  orderRef],
                 ['Product',    selected.name],
                 ['Variant',    form.variant || '—'],
@@ -590,7 +601,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 ['Amount',     formatPrice(totalAmount)],
                 ['Your Name',  form.customerName],
                 ['WhatsApp',   form.customerPhone],
-              ].map(([label, value]) => (
+              ] as [string, string][]).map(([label, value]) => (
                 <div key={label}
                   className="flex justify-between py-2 border-b
                     border-gray-100 dark:border-gray-800 last:border-0">
@@ -638,7 +649,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
       </div>
 
-      {/* Footer */}
       <p className="text-center text-xs text-gray-400 dark:text-gray-600 py-6">
         ⚡ Powered by OrdrX · ThiranX
       </p>
