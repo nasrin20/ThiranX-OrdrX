@@ -40,6 +40,8 @@ export interface Business {
   email:       string | null
   bio:         string | null
   plan:        PlanType
+  badges:      string[]
+  active:      boolean
   created_at:  string
 }
 

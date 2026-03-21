@@ -31,7 +31,7 @@ export function StatsRow({
     {
       label: 'Revenue',
       value: `₹${(totalRevenue / 100).toLocaleString('en-IN')}`,
-      sub:   'Total paid',
+      sub: 'Paid + Shipped',
       icon:  '💰',
       color: '#22c47a',
       bg:    '#dcfce7',
