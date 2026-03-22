@@ -27,23 +27,31 @@ export type OrderStatus =
   | 'cancelled'
   | 'overdue'
 
+// -- Preference Question
+export interface PrefQuestion {
+  id:       string
+  question: string
+  options:  string[]
+}
+
 // -- Business
 export interface Business {
-  id:          string
-  user_id:     string
-  name:        string
-  slug:        string
-  type:        BusinessType
-  theme_color: string
-  theme_bg:    string
-  logo_url:    string | null
-  whatsapp:    string | null
-  email:       string | null
-  bio:         string | null
-  plan:        PlanType
-  badges:      string[]
-  active:      boolean
-  created_at:  string
+  id:             string
+  user_id:        string
+  name:           string
+  slug:           string
+  type:           BusinessType
+  theme_color:    string
+  theme_bg:       string
+  logo_url:       string | null
+  whatsapp:       string | null
+  email:          string | null
+  bio:            string | null
+  plan:           PlanType
+  badges:         string[]
+  active:         boolean
+  pref_questions: PrefQuestion[]
+  created_at:     string
 }
 
 // -- Product
@@ -60,6 +68,7 @@ export interface Product {
   variants:    string[]
   active:      boolean
   photo_url:   string | null
+  pref_tags:   string[]
   created_at:  string
 }
 

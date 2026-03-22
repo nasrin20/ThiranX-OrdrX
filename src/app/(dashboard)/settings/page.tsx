@@ -1,12 +1,13 @@
 'use client'
 
 // OrdrX — Settings Page
-// Edit profile + logo + badges + theme color + background
+// Edit profile + logo + badges + theme + preference questions
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Business, BusinessType } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
+import { DEFAULT_QUESTIONS, PrefQuestion } from '@/constants/preferences'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
@@ -40,15 +41,13 @@ const THEME_COLORS = [
   { name: 'Emerald', value: '#10b981' },
 ]
 
-// ── Background options ─────────────────────────────────────
 const BG_OPTIONS = [
-  { name: 'Gradient',  value: 'gradient', preview: 'bg-gradient-to-br from-amber-400 to-amber-600' },
-  { name: 'Solid',     value: 'solid',    preview: 'bg-amber-500' },
-  { name: 'Dark',      value: 'dark',     preview: 'bg-gray-900' },
-  { name: 'Soft',      value: 'soft',     preview: 'bg-amber-50' },
+  { name: 'Gradient', value: 'gradient' },
+  { name: 'Solid',    value: 'solid'    },
+  { name: 'Dark',     value: 'dark'     },
+  { name: 'Soft',     value: 'soft'     },
 ]
 
-// ── Badge suggestions ──────────────────────────────────────
 const BADGE_SUGGESTIONS = [
   '🌿 Alcohol Free', '🐰 Cruelty Free', '🌱 Vegan',
   '🏠 Homemade', '✋ Handcrafted', '🚚 Free Delivery',
@@ -56,13 +55,102 @@ const BADGE_SUGGESTIONS = [
   '♻️ Eco Friendly', '🌸 Natural', '💯 Authentic',
 ]
 
-// ── Section wrapper ────────────────────────────────────────
+// ── Section ────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl border
       border-[#f0e8de] dark:border-gray-800 p-5 space-y-4">
       <h2 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h2>
       {children}
+    </div>
+  )
+}
+
+// ── Question Editor ────────────────────────────────────────
+function QuestionEditor({
+  question,
+  index,
+  onUpdate,
+  onDelete,
+  color,
+}: {
+  question: PrefQuestion
+  index:    number
+  onUpdate: (q: PrefQuestion) => void
+  onDelete: () => void
+  color:    string
+}) {
+  const [optionInput, setOptionInput] = useState('')
+
+  const addOption = () => {
+    const o = optionInput.trim()
+    if (o && !question.options.includes(o) && question.options.length < 6) {
+      onUpdate({ ...question, options: [...question.options, o] })
+    }
+    setOptionInput('')
+  }
+
+  const removeOption = (opt: string) =>
+    onUpdate({ ...question, options: question.options.filter((o) => o !== opt) })
+
+  const updateQuestion = (text: string) =>
+    onUpdate({ ...question, question: text })
+
+  return (
+    <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+          Question {index + 1}
+        </span>
+        <button type="button" onClick={onDelete}
+          className="text-xs text-red-400 hover:text-red-500">
+          Remove
+        </button>
+      </div>
+
+      {/* Question text */}
+      <input
+        type="text"
+        value={question.question}
+        onChange={(e) => updateQuestion(e.target.value)}
+        placeholder="e.g. What scent do you prefer?"
+        className={inputCls}
+      />
+
+      {/* Options */}
+      <div>
+        <p className="text-xs text-gray-400 mb-2">
+          Options ({question.options.length}/6):
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {question.options.map((opt) => (
+            <span key={opt}
+              className="flex items-center gap-1 text-xs font-semibold
+                px-2.5 py-1 rounded-full"
+              style={{ background: `${color}20`, color }}>
+              {opt}
+              <button type="button" onClick={() => removeOption(opt)}
+                className="hover:text-red-500">×</button>
+            </span>
+          ))}
+        </div>
+
+        {question.options.length < 6 && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={optionInput}
+              onChange={(e) => setOptionInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addOption()}
+              placeholder="Add option..."
+              className={cn(inputCls, 'flex-1 text-xs py-2')}
+            />
+            <Button variant="secondary" size="sm" type="button" onClick={addOption}>
+              Add
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -92,6 +180,7 @@ export default function SettingsPage() {
   const [customBadge, setCustomBadge] = useState('')
   const [themeColor,  setThemeColor]  = useState('#b5860d')
   const [themeBg,     setThemeBg]     = useState('gradient')
+  const [questions,   setQuestions]   = useState<PrefQuestion[]>([])
 
   // ── Fetch ──────────────────────────────────────────────
   const fetchBusiness = useCallback(async () => {
@@ -118,6 +207,7 @@ export default function SettingsPage() {
     setBadges(biz.badges      ?? [])
     setThemeColor(biz.theme_color ?? '#b5860d')
     setThemeBg(biz.theme_bg   ?? 'gradient')
+    setQuestions(biz.pref_questions ?? [])
     setLoading(false)
   }, [supabase, router])
 
@@ -171,6 +261,28 @@ export default function SettingsPage() {
     setCustomBadge('')
   }
 
+  // ── Question helpers ───────────────────────────────────
+  const addQuestion = () => {
+    if (questions.length >= 5) return
+    setQuestions((prev) => [...prev, {
+      id:       `q_${Date.now()}`,
+      question: '',
+      options:  [],
+    }])
+  }
+
+  const updateQuestion = (index: number, q: PrefQuestion) => {
+    setQuestions((prev) => prev.map((item, i) => i === index ? q : item))
+  }
+
+  const deleteQuestion = (index: number) => {
+    setQuestions((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const loadDefaults = () => {
+    setQuestions(DEFAULT_QUESTIONS[type] ?? [])
+  }
+
   // ── Save ───────────────────────────────────────────────
   const handleSave = async () => {
     if (!business) return
@@ -183,15 +295,16 @@ export default function SettingsPage() {
     const { error: updateError } = await supabase
       .from('businesses')
       .update({
-        name:        name.trim(),
-        bio:         bio.trim()      || null,
-        whatsapp:    whatsapp.trim() || null,
-        email:       email.trim()    || null,
+        name:           name.trim(),
+        bio:            bio.trim()      || null,
+        whatsapp:       whatsapp.trim() || null,
+        email:          email.trim()    || null,
         type,
-        logo_url:    logoUrl,
+        logo_url:       logoUrl,
         badges,
-        theme_color: themeColor,
-        theme_bg:    themeBg,
+        theme_color:    themeColor,
+        theme_bg:       themeBg,
+        pref_questions: questions,
       })
       .eq('id', business.id)
 
@@ -213,13 +326,8 @@ export default function SettingsPage() {
     router.refresh()
   }
 
-  // ── Preview header ─────────────────────────────────────
+  // ── Header preview ─────────────────────────────────────
   const getHeaderStyle = () => {
-    if (themeBg === 'gradient') {
-      return {
-        background: `linear-gradient(160deg, ${themeColor}ee, ${themeColor}99)`,
-      }
-    }
     if (themeBg === 'solid') return { background: themeColor }
     if (themeBg === 'dark')  return { background: '#1a1a2e' }
     if (themeBg === 'soft')  return { background: `${themeColor}22` }
@@ -232,7 +340,7 @@ export default function SettingsPage() {
         flex items-center justify-center">
         <div className="text-center">
           <div className="text-3xl mb-3 animate-pulse">⚙️</div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Loading settings...</p>
+          <p className="text-sm text-gray-500">Loading settings...</p>
         </div>
       </main>
     )
@@ -244,19 +352,17 @@ export default function SettingsPage() {
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">⚙️ Settings</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Update your store profile
-          </p>
+          <p className="text-sm text-gray-500 mt-0.5">Update your store profile</p>
         </div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-950 border border-red-200
-            text-red-600 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+          <div className="bg-red-50 border border-red-200 text-red-600
+            text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
         )}
         {saved && (
-          <div className="bg-green-50 dark:bg-green-950 border border-green-200
-            text-green-600 text-sm rounded-xl px-4 py-3 mb-4">
-            ✅ Settings saved successfully!
+          <div className="bg-green-50 border border-green-200 text-green-600
+            text-sm rounded-xl px-4 py-3 mb-4">
+            ✅ Settings saved!
           </div>
         )}
 
@@ -264,8 +370,6 @@ export default function SettingsPage() {
 
           {/* ── Store Info ── */}
           <Section title="🏪 Store Information">
-
-            {/* Store link */}
             <div className="bg-[#fdf6ef] dark:bg-gray-800 rounded-xl px-4 py-3
               flex items-center justify-between gap-3">
               <div>
@@ -286,14 +390,12 @@ export default function SettingsPage() {
             <div>
               <label className={labelCls}>Store Logo</label>
               <div className="flex items-center gap-4">
-                <div
-                  onClick={() => fileRef.current?.click()}
+                <div onClick={() => fileRef.current?.click()}
                   className="w-20 h-20 rounded-2xl overflow-hidden cursor-pointer
                     border-2 border-dashed border-[#f0e8de] dark:border-gray-700
                     hover:border-[#b5860d] transition-colors flex-shrink-0
                     flex items-center justify-center"
-                  style={{ background: logoPreview ? 'transparent' : '#fdf6ef' }}
-                >
+                  style={{ background: logoPreview ? 'transparent' : '#fdf6ef' }}>
                   {logoPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
@@ -303,17 +405,14 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Button variant="secondary" size="sm" type="button"
-                    loading={uploading}
-                    onClick={() => fileRef.current?.click()}>
-                    {logoPreview ? '🔄 Change Logo' : '📸 Upload Logo'}
+                    loading={uploading} onClick={() => fileRef.current?.click()}>
+                    {logoPreview ? '🔄 Change' : '📸 Upload Logo'}
                   </Button>
                   <p className="text-xs text-gray-400">JPG, PNG · Max 5MB</p>
                   {logoPreview && (
                     <button type="button"
                       onClick={() => { setLogoUrl(null); setLogoPreview(null) }}
-                      className="text-xs text-red-400 hover:text-red-500">
-                      Remove logo
-                    </button>
+                      className="text-xs text-red-400">Remove</button>
                   )}
                 </div>
               </div>
@@ -321,7 +420,6 @@ export default function SettingsPage() {
                 onChange={handleLogoChange} className="hidden" />
             </div>
 
-            {/* Name */}
             <div>
               <label className={labelCls}>Business Name *</label>
               <input type="text" value={name}
@@ -329,16 +427,14 @@ export default function SettingsPage() {
                 placeholder="e.g. Madhu the Mehak" className={inputCls} />
             </div>
 
-            {/* Bio */}
             <div>
               <label className={labelCls}>Bio</label>
               <textarea value={bio} onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell customers about your store..."
                 rows={3} className={inputCls + ' resize-none'} />
-              <p className="text-xs text-gray-400 mt-1">{bio.length}/150 characters</p>
+              <p className="text-xs text-gray-400 mt-1">{bio.length}/150</p>
             </div>
 
-            {/* Business type */}
             <div>
               <label className={labelCls}>Business Type</label>
               <div className="grid grid-cols-3 gap-2">
@@ -364,88 +460,47 @@ export default function SettingsPage() {
 
           {/* ── Theme ── */}
           <Section title="🎨 Store Theme">
-
-            {/* Live preview */}
             <div>
               <label className={labelCls}>Preview</label>
-              <div className="rounded-2xl overflow-hidden h-24 relative"
+              <div className="rounded-2xl overflow-hidden h-20 relative"
                 style={getHeaderStyle()}>
                 <div className="absolute inset-0 flex flex-col items-center
-                  justify-center text-white">
-                  <div className="w-10 h-10 rounded-full bg-white/20
-                    flex items-center justify-center text-xl mb-1">
-                    {logoPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logoPreview} alt="logo"
-                        className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      BUSINESS_TYPE_CONFIG[type].emoji
-                    )}
-                  </div>
-                  <p className="text-sm font-bold">{name || 'Your Store'}</p>
-                  <p className="text-xs opacity-70">@{business?.slug}</p>
+                  justify-center">
+                  <p className="text-sm font-bold text-white">{name || 'Your Store'}</p>
+                  <p className="text-xs text-white/60">@{business?.slug}</p>
                 </div>
               </div>
             </div>
 
-            {/* Color picker */}
             <div>
               <label className={labelCls}>Brand Color</label>
               <div className="flex flex-wrap gap-2">
                 {THEME_COLORS.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setThemeColor(c.value)}
+                  <button key={c.value} type="button" onClick={() => setThemeColor(c.value)}
                     title={c.name}
                     className={cn(
                       'w-9 h-9 rounded-full transition-all',
-                      themeColor === c.value
-                        ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
-                        : 'hover:scale-105',
+                      themeColor === c.value ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'hover:scale-105',
                     )}
-                    style={{ background: c.value }}
-                  />
+                    style={{ background: c.value }} />
                 ))}
-
-                {/* Custom color input */}
-                <div className="relative">
-                  <input
-                    type="color"
-                    value={themeColor}
-                    onChange={(e) => setThemeColor(e.target.value)}
-                    className="w-9 h-9 rounded-full cursor-pointer border-2
-                      border-gray-200 dark:border-gray-700"
-                    title="Custom color"
-                  />
-                </div>
+                <input type="color" value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="w-9 h-9 rounded-full cursor-pointer border-2 border-gray-200"
+                  title="Custom color" />
               </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Current: <span className="font-bold" style={{ color: themeColor }}>
-                  {themeColor}
-                </span>
-              </p>
             </div>
 
-            {/* Background style */}
             <div>
               <label className={labelCls}>Header Background</label>
               <div className="grid grid-cols-4 gap-2">
                 {BG_OPTIONS.map((bg) => (
-                  <button
-                    key={bg.value}
-                    type="button"
-                    onClick={() => setThemeBg(bg.value)}
+                  <button key={bg.value} type="button" onClick={() => setThemeBg(bg.value)}
                     className={cn(
-                      'flex flex-col items-center gap-1.5 p-2 rounded-xl',
-                      'border-2 transition-all',
-                      themeBg === bg.value
-                        ? 'border-[#b5860d]'
-                        : 'border-gray-100 dark:border-gray-700',
-                    )}
-                  >
-                    <div
-                      className="w-full h-8 rounded-lg"
+                      'flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all',
+                      themeBg === bg.value ? 'border-[#b5860d]' : 'border-gray-100 dark:border-gray-700',
+                    )}>
+                    <div className="w-full h-8 rounded-lg"
                       style={
                         bg.value === 'gradient'
                           ? { background: `linear-gradient(135deg, ${themeColor}ee, ${themeColor}77)` }
@@ -454,30 +509,23 @@ export default function SettingsPage() {
                           : bg.value === 'dark'
                           ? { background: '#1a1a2e' }
                           : { background: `${themeColor}22` }
-                      }
-                    />
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                      {bg.name}
-                    </p>
+                      } />
+                    <p className="text-xs font-semibold text-gray-500">{bg.name}</p>
                   </button>
                 ))}
               </div>
             </div>
-
           </Section>
 
           {/* ── Badges ── */}
           <Section title="🏷️ Store Badges">
-            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-              Up to 5 badges shown on your storefront
-            </p>
+            <p className="text-xs text-gray-500 -mt-2">Up to 5 badges on your storefront</p>
 
             {badges.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {badges.map((b) => (
-                  <span key={b}
-                    className="flex items-center gap-1.5 text-xs font-semibold
-                      px-3 py-1.5 rounded-full"
+                  <span key={b} className="flex items-center gap-1.5 text-xs font-semibold
+                    px-3 py-1.5 rounded-full"
                     style={{ background: `${themeColor}20`, color: themeColor }}>
                     {b}
                     <button type="button" onClick={() => toggleBadge(b)}
@@ -494,7 +542,7 @@ export default function SettingsPage() {
                     'text-xs px-3 py-1.5 rounded-full border transition-colors',
                     badges.includes(b)
                       ? 'text-white border-transparent'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[#b5860d]',
+                      : 'border-gray-200 dark:border-gray-700 text-gray-500',
                     badges.length >= 5 && !badges.includes(b) && 'opacity-40 cursor-not-allowed',
                   )}
                   style={badges.includes(b) ? { background: themeColor } : {}}>
@@ -509,11 +557,65 @@ export default function SettingsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && addCustomBadge()}
                 placeholder="Add custom badge..."
                 disabled={badges.length >= 5}
-                className={inputCls + ' flex-1'} />
+                className={cn(inputCls, 'flex-1')} />
               <Button variant="secondary" size="md" type="button"
                 onClick={addCustomBadge} disabled={badges.length >= 5}>
                 Add
               </Button>
+            </div>
+          </Section>
+
+          {/* ── Preference Questions ── */}
+          <Section title="🧠 Preference Questions">
+            <div className="-mt-2">
+              <p className="text-xs text-gray-500 mb-3">
+                Help customers find the right product with a smart quiz.
+                If no questions added, the quiz button won&apos;t show on your store.
+              </p>
+
+              {/* Load defaults button */}
+              {questions.length === 0 && (
+                <button type="button" onClick={loadDefaults}
+                  className="w-full py-3 rounded-xl border-2 border-dashed
+                    border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
+                    text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]
+                    transition-colors mb-4">
+                  ✨ Load suggested questions for {BUSINESS_TYPE_CONFIG[type].label}
+                </button>
+              )}
+
+              {/* Questions list */}
+              <div className="space-y-3">
+                {questions.map((q, i) => (
+                  <QuestionEditor
+                    key={q.id}
+                    question={q}
+                    index={i}
+                    color={themeColor}
+                    onUpdate={(updated) => updateQuestion(i, updated)}
+                    onDelete={() => deleteQuestion(i)}
+                  />
+                ))}
+              </div>
+
+              {/* Add question button */}
+              {questions.length < 5 && (
+                <button type="button" onClick={addQuestion}
+                  className="w-full mt-3 py-3 rounded-xl border-2 border-dashed
+                    border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
+                    text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]
+                    transition-colors">
+                  + Add Question ({questions.length}/5)
+                </button>
+              )}
+
+              {questions.length > 0 && (
+                <button type="button"
+                  onClick={() => setQuestions([])}
+                  className="text-xs text-red-400 hover:text-red-500 mt-2">
+                  Clear all questions
+                </button>
+              )}
             </div>
           </Section>
 
@@ -524,9 +626,7 @@ export default function SettingsPage() {
               <input type="tel" value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="+91 98765 43210" className={inputCls} />
-              <p className="text-xs text-gray-400 mt-1">
-                Include country code — customers message you here
-              </p>
+              <p className="text-xs text-gray-400 mt-1">Include country code</p>
             </div>
             <div>
               <label className={labelCls}>Email (optional)</label>
@@ -541,9 +641,6 @@ export default function SettingsPage() {
             <div className="text-center py-2">
               <p className="text-2xl font-bold mb-2" style={{ color: themeColor }}>
                 ordrx.in/{business?.slug}
-              </p>
-              <p className="text-xs text-gray-400 mb-4">
-                Share this on your Instagram bio
               </p>
               <div className="flex gap-2">
                 <Button variant="primary" size="lg" type="button" className="flex-1"
@@ -562,22 +659,18 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Save ── */}
+          {/* Save */}
           <Button variant="primary" size="lg" type="button"
             onClick={handleSave} loading={saving || uploading} className="w-full">
             💾 Save Changes
           </Button>
 
-          {/* ── Account ── */}
+          {/* Account */}
           <Section title="⚠️ Account">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Sign out
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Sign out of your OrdrX account
-                </p>
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Sign out</p>
+                <p className="text-xs text-gray-400 mt-0.5">Sign out of OrdrX</p>
               </div>
               <Button variant="danger" size="sm" type="button" onClick={signOut}>
                 Sign Out

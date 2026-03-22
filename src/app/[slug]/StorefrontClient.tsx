@@ -1,12 +1,11 @@
 'use client'
 
-// OrdrX — Storefront Client with Cart
-// Customers can add multiple products before checkout
+// OrdrX — Storefront Client with Preference Quiz + Cart
 
-import { useState } from 'react'
-import { Business, Product, BusinessType, CartItem } from '@/types'
+import { useState, useMemo } from 'react'
+import { Business, Product, BusinessType, CartItem, PrefQuestion } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
-import { cn } from '@/lib/utils'
+import { matchProducts, PrefAnswer } from '@/constants/preferences'
 
 // ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
@@ -20,7 +19,7 @@ interface OrderForm {
   note:          string
 }
 
-type Screen = 'shop' | 'detail' | 'checkout' | 'confirmed'
+type Screen = 'shop' | 'quiz' | 'detail' | 'checkout' | 'confirmed'
 
 // ── Helpers ────────────────────────────────────────────────
 const formatPrice = (paise: number): string =>
@@ -38,10 +37,8 @@ const getHeaderStyle = (color: string, bg: string): React.CSSProperties => {
   return { background: `linear-gradient(160deg, ${color}ee, ${color}99)` }
 }
 
-const getTextColor = (bg: string, color: string): string => {
-  if (bg === 'soft') return color
-  return '#ffffff'
-}
+const getTextColor = (bg: string, color: string): string =>
+  bg === 'soft' ? color : '#ffffff'
 
 // ── Product Thumbnail ──────────────────────────────────────
 function ProductThumbnail({
@@ -85,35 +82,29 @@ function StoreAvatar({ logoUrl, name, emoji }: {
 
 // ── Product Card ───────────────────────────────────────────
 function ProductCard({
-  product,
-  color,
-  cartItem,
-  onSelect,
-  onAddToCart,
-  onUpdateQty,
+  product, color, cartItem, recommended,
+  onSelect, onAddToCart, onUpdateQty,
 }: {
-  product:      Product
-  color:        string
-  cartItem?:    CartItem
-  onSelect:     (p: Product) => void
-  onAddToCart:  (p: Product) => void
-  onUpdateQty:  (productId: string, delta: number) => void
+  product:     Product
+  color:       string
+  cartItem?:   CartItem
+  recommended?: boolean
+  onSelect:    (p: Product) => void
+  onAddToCart: (p: Product) => void
+  onUpdateQty: (productId: string, delta: number) => void
 }) {
-  const discount  = getDiscount(product.price, product.mrp ?? null)
-  const inCart    = !!cartItem
-  const cartQty   = cartItem?.quantity ?? 0
+  const discount = getDiscount(product.price, product.mrp ?? null)
+  const inCart   = !!cartItem
+  const cartQty  = cartItem?.quantity ?? 0
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden
       border-2 transition-all"
-      style={{ borderColor: inCart ? color : 'transparent' }}>
+      style={{ borderColor: inCart ? color : recommended ? `${color}60` : 'transparent' }}>
 
-      {/* Image — clickable to view detail */}
-      <div
-        className="h-36 relative overflow-hidden cursor-pointer"
+      <div className="h-36 relative overflow-hidden cursor-pointer"
         style={{ background: `${color}15` }}
-        onClick={() => onSelect(product)}
-      >
+        onClick={() => onSelect(product)}>
         <ProductThumbnail
           photoUrl={product.photo_url ?? null}
           emoji={product.emoji}
@@ -126,6 +117,12 @@ function ProductCard({
             {product.tag}
           </span>
         )}
+        {recommended && !inCart && (
+          <span className="absolute top-2 right-2 text-xs font-bold px-2 py-0.5
+            rounded-full bg-green-500 text-white">
+            ✨ Match
+          </span>
+        )}
         {inCart && (
           <div className="absolute top-2 right-2 w-6 h-6 rounded-full
             flex items-center justify-center text-white text-xs font-bold"
@@ -135,12 +132,10 @@ function ProductCard({
         )}
       </div>
 
-      {/* Info */}
       <div className="p-3">
-        <h3
-          className="text-sm font-bold text-gray-900 dark:text-white leading-tight mb-1 truncate cursor-pointer"
-          onClick={() => onSelect(product)}
-        >
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white
+          leading-tight mb-1 truncate cursor-pointer"
+          onClick={() => onSelect(product)}>
           {product.name}
         </h3>
 
@@ -148,7 +143,6 @@ function ProductCard({
           <p className="text-xs text-gray-400 mb-2 line-clamp-1">{product.description}</p>
         )}
 
-        {/* Variants preview */}
         {product.variants.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {product.variants.slice(0, 2).map((v) => (
@@ -161,7 +155,6 @@ function ProductCard({
           </div>
         )}
 
-        {/* Price */}
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
           <span className="text-sm font-bold" style={{ color }}>
             {formatPrice(product.price)}
@@ -176,46 +169,26 @@ function ProductCard({
           )}
         </div>
 
-        {/* Add to cart / qty control */}
         {!inCart ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (product.variants.length > 0) {
-                onSelect(product)
-              } else {
-                onAddToCart(product)
-              }
-            }}
-            className="w-full py-2 rounded-xl text-white text-xs font-bold
-              transition-all active:scale-[0.98]"
-            style={{ background: color }}
-          >
+          <button type="button"
+            onClick={() => product.variants.length > 0 ? onSelect(product) : onAddToCart(product)}
+            className="w-full py-2 rounded-xl text-white text-xs font-bold transition-all"
+            style={{ background: color }}>
             + Add to Cart
           </button>
         ) : (
           <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => onUpdateQty(product.id, -1)}
+            <button type="button" onClick={() => onUpdateQty(product.id, -1)}
               className="w-8 h-8 rounded-full border-2 text-sm font-bold
-                flex items-center justify-center transition-colors"
-              style={{ borderColor: color, color }}
-            >
-              −
-            </button>
+                flex items-center justify-center"
+              style={{ borderColor: color, color }}>−</button>
             <span className="text-sm font-bold" style={{ color }}>
               {cartQty} in cart
             </span>
-            <button
-              type="button"
-              onClick={() => onUpdateQty(product.id, 1)}
+            <button type="button" onClick={() => onUpdateQty(product.id, 1)}
               className="w-8 h-8 rounded-full text-white text-sm font-bold
                 flex items-center justify-center"
-              style={{ background: color }}
-            >
-              +
-            </button>
+              style={{ background: color }}>+</button>
           </div>
         )}
       </div>
@@ -224,44 +197,159 @@ function ProductCard({
 }
 
 // ── Cart Bar ───────────────────────────────────────────────
-function CartBar({
-  cart,
-  color,
-  onCheckout,
-}: {
-  cart:       CartItem[]
-  color:      string
-  onCheckout: () => void
+function CartBar({ cart, color, onCheckout }: {
+  cart: CartItem[]; color: string; onCheckout: () => void
 }) {
   const totalItems  = cart.reduce((s, i) => s + i.quantity, 0)
   const totalAmount = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
-
   if (totalItems === 0) return null
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-6 pt-2
       bg-gradient-to-t from-gray-50 dark:from-gray-950 to-transparent">
-      <button
-        type="button"
-        onClick={onCheckout}
+      <button type="button" onClick={onCheckout}
         className="w-full max-w-md mx-auto flex items-center justify-between
           px-5 py-4 rounded-2xl text-white font-bold shadow-xl
           transition-all active:scale-[0.98] block"
-        style={{ background: color }}
-      >
+        style={{ background: color }}>
         <div className="flex items-center gap-2">
           <span className="bg-white/20 rounded-full w-7 h-7
-            flex items-center justify-center text-sm">
-            {totalItems}
-          </span>
-          <span className="text-sm">
-            {totalItems} item{totalItems > 1 ? 's' : ''} in cart
-          </span>
+            flex items-center justify-center text-sm">{totalItems}</span>
+          <span className="text-sm">{totalItems} item{totalItems > 1 ? 's' : ''} in cart</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-base">{formatPrice(totalAmount)}</span>
           <span>→</span>
         </div>
+      </button>
+    </div>
+  )
+}
+
+// ── Preference Quiz ────────────────────────────────────────
+function PreferenceQuiz({
+  questions, color, onComplete, onSkip,
+}: {
+  questions:  PrefQuestion[]
+  color:      string
+  onComplete: (answers: PrefAnswer[]) => void
+  onSkip:     () => void
+}) {
+  const [currentQ, setCurrentQ] = useState(0)
+  const [answers,  setAnswers]  = useState<Record<string, string[]>>({})
+
+  const question  = questions[currentQ]
+  const isLastQ   = currentQ === questions.length - 1
+  const isFirstQ  = currentQ === 0
+  const progress  = ((currentQ) / questions.length) * 100
+  const selected  = answers[question.id] ?? []
+  const hasAnswer = selected.length > 0
+
+  const toggleOption = (opt: string) => {
+    setAnswers((prev) => {
+      const current = prev[question.id] ?? []
+      const exists  = current.includes(opt)
+      return {
+        ...prev,
+        [question.id]: exists
+          ? current.filter((o) => o !== opt)
+          : [...current, opt],
+      }
+    })
+  }
+
+  const handleNext = () => {
+    if (isLastQ) {
+      // Convert to PrefAnswer array
+      const flat: PrefAnswer[] = Object.entries(answers).flatMap(
+        ([questionId, opts]) => opts.map((answer) => ({ questionId, answer }))
+      )
+      onComplete(flat)
+    } else {
+      setCurrentQ((q) => q + 1)
+    }
+  }
+
+  return (
+    <div className="max-w-md mx-auto px-4 py-6">
+
+      {/* Progress */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700
+          rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${progress}%`, background: color }} />
+        </div>
+        <span className="text-xs text-gray-400 flex-shrink-0">
+          {currentQ + 1}/{questions.length}
+        </span>
+      </div>
+
+      {/* Question */}
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+        {question.question}
+      </h2>
+      <p className="text-sm text-gray-400 mb-6">
+        Select all that apply
+      </p>
+
+      {/* Options — multi select */}
+      <div className="grid grid-cols-2 gap-3 mb-8">
+        {question.options.map((opt) => {
+          const isSelected = selected.includes(opt)
+          return (
+            <button key={opt} type="button"
+              onClick={() => toggleOption(opt)}
+              className="p-4 rounded-2xl border-2 text-sm font-semibold
+                transition-all active:scale-[0.98] text-left flex items-center gap-2"
+              style={{
+                background:  isSelected ? `${color}15` : 'transparent',
+                borderColor: isSelected ? color : '#e5e7eb',
+                color:       isSelected ? color : undefined,
+              }}>
+              <div className="w-5 h-5 rounded-full border-2 flex items-center
+                justify-center flex-shrink-0 transition-all"
+                style={{
+                  borderColor: isSelected ? color : '#d1d5db',
+                  background:  isSelected ? color : 'transparent',
+                }}>
+                {isSelected && (
+                  <span className="text-white text-xs font-bold">✓</span>
+                )}
+              </div>
+              {opt}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex gap-3">
+        {!isFirstQ && (
+          <button type="button"
+            onClick={() => setCurrentQ((q) => q - 1)}
+            className="flex-1 py-3 rounded-2xl border-2 text-sm font-bold
+              transition-colors text-gray-500 dark:text-gray-400
+              border-gray-200 dark:border-gray-700">
+            ← Back
+          </button>
+        )}
+
+        <button type="button"
+          onClick={handleNext}
+          disabled={!hasAnswer}
+          className="flex-1 py-3 rounded-2xl text-white text-sm font-bold
+            transition-all disabled:opacity-40"
+          style={{ background: color }}>
+          {isLastQ ? '✨ Show my matches!' : 'Next →'}
+        </button>
+      </div>
+
+      {/* Skip */}
+      <button type="button" onClick={onSkip}
+        className="w-full text-center text-xs text-gray-400
+          hover:text-gray-600 mt-4">
+        Skip — Show all products
       </button>
     </div>
   )
@@ -277,6 +365,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const textColor   = getTextColor(bg, color)
   const isLight     = bg === 'soft'
 
+  // ── Has preference questions? ─────────────────────────
+  const hasQuiz = (business.pref_questions ?? []).length > 0
+
   // ── State ────────────────────────────────────────────────
   const [screen,    setScreen]    = useState<Screen>('shop')
   const [selected,  setSelected]  = useState<Product | null>(null)
@@ -284,8 +375,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState<string | null>(null)
   const [cart,      setCart]      = useState<CartItem[]>([])
+  const [answers,   setAnswers]   = useState<PrefAnswer[]>([])
+  const [quizDone,  setQuizDone]  = useState(false)
 
-  // Detail screen variant/qty state
   const [detailVariant, setDetailVariant] = useState('')
   const [detailQty,     setDetailQty]     = useState(1)
 
@@ -296,18 +388,36 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const updateForm = (field: keyof OrderForm, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }))
 
+  // ── Sorted/filtered products based on quiz answers ────
+  const displayProducts = useMemo(() => {
+    if (!quizDone || !answers.length) return products
+    return matchProducts(products, answers)
+  }, [products, answers, quizDone])
+
+  // Which products are "recommended" (matched)
+  const recommendedIds = useMemo(() => {
+    if (!quizDone || !answers.length) return new Set<string>()
+    const answerValues = answers.map((a) => a.answer.toLowerCase())
+    return new Set(
+      products
+        .filter((p) => {
+          const tags = [...(p.pref_tags ?? []), ...(p.variants ?? [])].map((t) => t.toLowerCase())
+          return answerValues.some((a) => tags.some((t) => t.includes(a) || a.includes(t)))
+        })
+        .map((p) => p.id)
+    )
+  }, [products, answers, quizDone])
+
+  const matchCount = recommendedIds.size
+
   // ── Cart helpers ──────────────────────────────────────────
   const totalAmount = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
   const totalItems  = cart.reduce((s, i) => s + i.quantity, 0)
-
-  const getCartItem = (productId: string) =>
-    cart.find((i) => i.product.id === productId)
+  const getCartItem = (productId: string) => cart.find((i) => i.product.id === productId)
 
   const addToCart = (product: Product, variant = '', qty = 1) => {
     setCart((prev) => {
-      const existing = prev.find(
-        (i) => i.product.id === product.id && i.variant === variant
-      )
+      const existing = prev.find((i) => i.product.id === product.id && i.variant === variant)
       if (existing) {
         return prev.map((i) =>
           i.product.id === product.id && i.variant === variant
@@ -322,11 +432,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const updateQty = (productId: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((i) =>
-          i.product.id === productId
-            ? { ...i, quantity: i.quantity + delta }
-            : i
-        )
+        .map((i) => i.product.id === productId ? { ...i, quantity: i.quantity + delta } : i)
         .filter((i) => i.quantity > 0)
     )
   }
@@ -334,7 +440,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const removeFromCart = (productId: string) =>
     setCart((prev) => prev.filter((i) => i.product.id !== productId))
 
-  // ── Select product (detail screen) ───────────────────────
   const openDetail = (product: Product) => {
     setSelected(product)
     setDetailVariant(product.variants[0] ?? '')
@@ -348,16 +453,31 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setScreen('shop')
   }
 
+  // ── Quiz handlers ─────────────────────────────────────────
+  const handleQuizComplete = (newAnswers: PrefAnswer[]) => {
+    setAnswers(newAnswers)
+    setQuizDone(true)
+    setScreen('shop')
+  }
+
+  const handleQuizSkip = () => {
+    setAnswers([])
+    setQuizDone(false)
+    setScreen('shop')
+  }
+
+  const resetQuiz = () => {
+    setAnswers([])
+    setQuizDone(false)
+  }
+
   // ── Place order ───────────────────────────────────────────
   const placeOrder = async () => {
     if (!form.customerName.trim() || !form.customerPhone.trim()) {
       setError('Please fill in your name and WhatsApp number.')
       return
     }
-    if (cart.length === 0) {
-      setError('Your cart is empty.')
-      return
-    }
+    if (cart.length === 0) { setError('Your cart is empty.'); return }
 
     setLoading(true)
     setError(null)
@@ -413,13 +533,11 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
       <div className="px-4 pt-10 pb-6 text-center relative overflow-hidden"
         style={headerStyle}>
 
-        {(screen === 'detail' || screen === 'checkout') && (
+        {(screen === 'detail' || screen === 'checkout' || screen === 'quiz') && (
           <button type="button" aria-label="Go back"
-            onClick={() => setScreen(screen === 'checkout' ? 'shop' : 'shop')}
+            onClick={() => setScreen('shop')}
             className="absolute left-4 top-4 text-2xl font-light"
-            style={{ color: textColor }}>
-            ←
-          </button>
+            style={{ color: textColor }}>←</button>
         )}
 
         <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3
@@ -439,8 +557,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         </p>
 
         {business.bio && (
-          <p className="text-sm max-w-xs mx-auto mb-3"
-            style={{ color: `${textColor}cc` }}>
+          <p className="text-sm max-w-xs mx-auto mb-3" style={{ color: `${textColor}cc` }}>
             {business.bio}
           </p>
         )}
@@ -454,33 +571,76 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               style={{
                 background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
                 color: isLight ? color : '#fff',
-              }}>
-              {badge}
-            </span>
+              }}>{badge}</span>
           ))}
           <span className="text-xs px-3 py-1 rounded-full"
             style={{
               background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
               color: isLight ? color : '#fff',
-            }}>
-            💬 WhatsApp orders
-          </span>
+            }}>💬 WhatsApp orders</span>
           <span className="text-xs px-3 py-1 rounded-full"
             style={{
               background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
               color: isLight ? color : '#fff',
-            }}>
-            🚚 Ships India
-          </span>
+            }}>🚚 Ships India</span>
         </div>
       </div>
 
       {/* ── Content ── */}
       <div className="max-w-md mx-auto px-4 py-6 pb-32">
 
+        {/* ── QUIZ SCREEN ── */}
+        {screen === 'quiz' && hasQuiz && (
+          <PreferenceQuiz
+            questions={business.pref_questions}
+            color={color}
+            onComplete={handleQuizComplete}
+            onSkip={handleQuizSkip}
+          />
+        )}
+
         {/* ── SHOP ── */}
         {screen === 'shop' && (
           <>
+            {/* Quiz CTA — only show if business has questions */}
+            {hasQuiz && !quizDone && (
+              <button type="button"
+                onClick={() => setScreen('quiz')}
+                className="w-full mb-4 py-4 rounded-2xl border-2 text-sm font-bold
+                  transition-all flex items-center justify-between px-5"
+                style={{ borderColor: color, color }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🎯</span>
+                  <div className="text-left">
+                    <p className="font-bold">Help me choose</p>
+                    <p className="text-xs opacity-60 font-normal">
+                      Answer {business.pref_questions.length} quick questions
+                    </p>
+                  </div>
+                </div>
+                <span>→</span>
+              </button>
+            )}
+
+            {/* Quiz results banner */}
+            {quizDone && (
+              <div className="mb-4 px-4 py-3 rounded-2xl flex items-center justify-between"
+                style={{ background: `${color}15` }}>
+                <div>
+                  <p className="text-sm font-bold" style={{ color }}>
+                    ✨ {matchCount > 0 ? `${matchCount} products match your taste!` : 'Showing all products'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Based on your preferences
+                  </p>
+                </div>
+                <button type="button" onClick={resetQuiz}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline">
+                  Reset
+                </button>
+              </div>
+            )}
+
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-4">
               {products.length} Products
             </p>
@@ -492,12 +652,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {products.map((p) => (
+                {displayProducts.map((p) => (
                   <ProductCard
                     key={p.id}
                     product={p}
                     color={color}
                     cartItem={getCartItem(p.id)}
+                    recommended={quizDone && recommendedIds.has(p.id)}
                     onSelect={openDetail}
                     onAddToCart={(prod) => addToCart(prod, '', 1)}
                     onUpdateQty={updateQty}
@@ -537,29 +698,24 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               <p className="text-sm text-gray-500 mb-4">{selected.description}</p>
             )}
 
-            {/* Variant selector */}
             {selected.variants.length > 0 && (
               <div className="mb-4">
                 <label className="block text-xs font-semibold uppercase
                   tracking-wide text-gray-500 mb-2">Select Option</label>
                 <div className="flex flex-wrap gap-2">
                   {selected.variants.map((v) => (
-                    <button key={v} type="button"
-                      onClick={() => setDetailVariant(v)}
+                    <button key={v} type="button" onClick={() => setDetailVariant(v)}
                       className="px-4 py-2 rounded-xl text-sm font-semibold border-2"
                       style={{
                         background:  detailVariant === v ? color : 'transparent',
                         color:       detailVariant === v ? '#fff' : color,
                         borderColor: color,
-                      }}>
-                      {v}
-                    </button>
+                      }}>{v}</button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Quantity */}
             <div className="mb-4">
               <label className="block text-xs font-semibold uppercase
                 tracking-wide text-gray-500 mb-2">Quantity</label>
@@ -579,10 +735,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </div>
             </div>
 
-            {/* Price */}
             <div className="rounded-2xl p-4 mb-4 flex justify-between items-center"
               style={{ background: `${color}15` }}>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="text-sm text-gray-600">
                 {detailQty} × {formatPrice(selected.price)}
               </span>
               <span className="text-2xl font-bold" style={{ color }}>
@@ -596,7 +751,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               style={{ background: color }}>
               🛒 Add to Cart
             </button>
-
             <button type="button" onClick={() => setScreen('shop')}
               className="w-full py-3 text-sm font-semibold mt-2"
               style={{ color }}>
@@ -609,22 +763,17 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {screen === 'checkout' && (
           <div>
             <div className="flex items-center justify-between mb-4">
-            <div>
+              <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                Your Order
+                  Your Order
                 </h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                Review and confirm
-                </p>
-            </div>
-            <button
-                type="button"
-                onClick={() => setScreen('shop')}
-                className="text-sm font-bold px-3 py-1.5 rounded-xl border-2 transition-colors"
-                style={{ borderColor: color, color }}
-            >
+                <p className="text-sm text-gray-500 mt-0.5">Review and confirm</p>
+              </div>
+              <button type="button" onClick={() => setScreen('shop')}
+                className="text-sm font-bold px-3 py-1.5 rounded-xl border-2"
+                style={{ borderColor: color, color }}>
                 ✏️ Edit Cart
-            </button>
+              </button>
             </div>
 
             {/* Cart items */}
@@ -644,8 +793,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
-                      {item.product.name}
-                      {item.variant ? ` · ${item.variant}` : ''}
+                      {item.product.name}{item.variant ? ` · ${item.variant}` : ''}
                     </p>
                     <p className="text-xs text-gray-400">
                       {formatPrice(item.product.price)} × {item.quantity}
@@ -655,16 +803,11 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                     <span className="text-sm font-bold" style={{ color }}>
                       {formatPrice(item.product.price * item.quantity)}
                     </span>
-                    <button type="button"
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="text-gray-300 hover:text-red-400 text-lg">
-                      ×
-                    </button>
+                    <button type="button" onClick={() => removeFromCart(item.product.id)}
+                      className="text-gray-300 hover:text-red-400 text-lg">×</button>
                   </div>
                 </div>
               ))}
-
-              {/* Total */}
               <div className="flex justify-between items-center pt-3 mt-1">
                 <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
                   Total ({totalItems} items)
@@ -675,7 +818,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </div>
             </div>
 
-            {/* Customer details */}
             <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
               Your Details
             </h3>
@@ -707,11 +849,8 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               className="w-full py-4 rounded-2xl text-white text-base font-bold
                 transition-all disabled:opacity-50 active:scale-[0.98]"
               style={{ background: color }}>
-              {loading
-                ? 'Placing order...'
-                : `Confirm Order — ${formatPrice(totalAmount)}`}
+              {loading ? 'Placing order...' : `Confirm Order — ${formatPrice(totalAmount)}`}
             </button>
-
             <p className="text-center text-xs text-gray-400 mt-3">
               Seller will contact you on WhatsApp to confirm payment
             </p>
@@ -722,9 +861,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {screen === 'confirmed' && (
           <div className="text-center">
             <div className="w-20 h-20 rounded-full flex items-center justify-center
-              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>
-              ✅
-            </div>
+              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>✅</div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
               Order Confirmed! 🎉
             </h2>
@@ -732,33 +869,25 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               {business.name} will contact you on WhatsApp soon.
             </p>
 
-            {/* Order summary */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl border
               border-gray-100 dark:border-gray-800 p-4 text-left mb-4">
-              <div className="flex justify-between py-2 border-b
-                border-gray-100 dark:border-gray-800">
+              <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
                 <span className="text-xs text-gray-400">Order Ref</span>
-                <span className="text-xs font-bold text-gray-900 dark:text-white">
-                  {orderRef}
-                </span>
+                <span className="text-xs font-bold text-gray-900 dark:text-white">{orderRef}</span>
               </div>
-
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
                   className="flex justify-between py-2 border-b
                     border-gray-100 dark:border-gray-800 last:border-0">
                   <span className="text-xs text-gray-400 truncate flex-1 mr-2">
-                    {item.product.name}
-                    {item.variant ? ` · ${item.variant}` : ''}
-                    {` × ${item.quantity}`}
+                    {item.product.name}{item.variant ? ` · ${item.variant}` : ''} × {item.quantity}
                   </span>
                   <span className="text-xs font-bold text-gray-900 dark:text-white flex-shrink-0">
                     {formatPrice(item.product.price * item.quantity)}
                   </span>
                 </div>
               ))}
-
-              <div className="flex justify-between pt-3 mt-1">
+              <div className="flex justify-between pt-3">
                 <span className="text-xs font-bold text-gray-500">Total</span>
                 <span className="text-sm font-bold" style={{ color }}>
                   {formatPrice(totalAmount)}
@@ -791,11 +920,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
       {/* ── Floating Cart Bar ── */}
       {screen === 'shop' && (
-        <CartBar
-          cart={cart}
-          color={color}
-          onCheckout={() => setScreen('checkout')}
-        />
+        <CartBar cart={cart} color={color} onCheckout={() => setScreen('checkout')} />
       )}
 
       <p className="text-center text-xs text-gray-400 py-6">

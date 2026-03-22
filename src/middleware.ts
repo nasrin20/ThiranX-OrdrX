@@ -1,5 +1,5 @@
-// OrdrX Proxy
-// Protects dashboard routes only — storefront is public
+// OrdrX — Middleware
+// Handles @ redirect + auth protection
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -29,38 +29,50 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   const path = request.nextUrl.pathname
 
-  // ── Public routes — never redirect ──────────────────────
-  // Storefront pages like /madhu-the-mehak are public
-  const isAuthPage      = path === '/login' || path === '/signup'
-  const isDashboardPage = path.startsWith('/dashboard') ||
-                          path.startsWith('/products')  ||
-                          path.startsWith('/orders')    ||
-                          path.startsWith('/customers') ||
-                          path.startsWith('/onboarding')
+  // ── Handle @ in URL ──────────────────────────────────────
+  // ordrx.in/@madhu → ordrx.in/madhu
+  if (path.startsWith('/@')) {
+    const slug   = path.slice(2)
+    const url    = request.nextUrl.clone()
+    url.pathname = `/${slug}`
+    return NextResponse.redirect(url)
+  }
 
-  // Protect dashboard — redirect to login if not logged in
+  // ── Protected dashboard routes ───────────────────────────
+  const isDashboardPage =
+    path.startsWith('/dashboard') ||
+    path.startsWith('/products')  ||
+    path.startsWith('/orders')    ||
+    path.startsWith('/customers') ||
+    path.startsWith('/settings')  ||
+    path.startsWith('/onboarding')
+
+  const isAuthPage =
+    path === '/login' ||
+    path === '/signup'
+
+  // Not logged in → redirect to login
   if (!user && isDashboardPage) {
-    const url = request.nextUrl.clone()
+    const url    = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Redirect logged in users away from auth pages
+  // Logged in → redirect away from auth pages
   if (user && isAuthPage) {
-    const url = request.nextUrl.clone()
+    const url    = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
-  // All other routes (storefront) — let through freely ✅
+  // Everything else — let through freely ✅
   return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
