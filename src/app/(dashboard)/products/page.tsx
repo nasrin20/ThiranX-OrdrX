@@ -10,11 +10,14 @@ import { PLAN_LIMITS } from '@/constants/plans'
 import { ProductCard } from '@/components/products/ProductCard'
 import { ProductForm, ProductFormData } from '@/components/products/ProductForm'
 import { Button } from '@/components/ui/Button'
+// Add this import
+import { useRouter } from 'next/navigation'
 
 // ── Component ──────────────────────────────────────────────
 export default function ProductsPage() {
   const supabase = createClient()
-
+  const router   = useRouter()
+  
   const [business,  setBusiness]  = useState<Business | null>(null)
   const [products,  setProducts]  = useState<Product[]>([])
   const [loading,   setLoading]   = useState(true)
@@ -233,8 +236,13 @@ export default function ProductsPage() {
             <span>
               🔒 You&apos;ve reached your free plan limit ({planLimit} products).
             </span>
-            <Button variant="primary" size="sm">
-              Upgrade
+            // Replace with:
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => router.push('/upgrade')}
+            >
+              Upgrade ⚡
             </Button>
           </div>
         )}

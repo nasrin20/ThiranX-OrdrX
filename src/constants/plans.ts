@@ -12,22 +12,22 @@ export const PLAN_LIMITS: Record<PlanType, {
   storage: number // in MB
 }> = {
   free: {
-    products:      5,
-    orders:        20,
+    products:      3,
+    orders:        50,
     customers:     50,
     whatsappSends: 10,
     storage:       50,
   },
   starter: {
-    products:      25,
-    orders:        100,
+    products:      50,
+    orders:        200,
     customers:     500,
     whatsappSends: 100,
     storage:       500,
   },
   growth: {
-    products:      100,
-    orders:        500,
+    products:      200,
+    orders:        1000,
     customers:     2000,
     whatsappSends: 500,
     storage:       2048,

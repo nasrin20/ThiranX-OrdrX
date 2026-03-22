@@ -29,6 +29,7 @@ export interface ProductFormData {
   variants:    string[]
   active:      boolean
   photo_url:   string | null
+  pref_tags:   string[]  // ← ADD
 }
 
 // ── Constants ──────────────────────────────────────────────
@@ -82,6 +83,7 @@ export function ProductForm({
   const [variantInput, setVariantInput] = useState('')
   const [photoUrl,     setPhotoUrl]     = useState<string | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [prefTags, setPrefTags] = useState<string[]>([])
 
   // ── Populate on edit ───────────────────────────────────
   useEffect(() => {
@@ -97,6 +99,7 @@ export function ProductForm({
       setVariants(initial.variants)
       setPhotoUrl(initial.photo_url ?? null)
       setPhotoPreview(initial.photo_url ?? null)
+      setPrefTags(initial.pref_tags ?? [])
     }
   }, [initial])
 
@@ -185,6 +188,7 @@ export function ProductForm({
       variants,
       active,
       photo_url:   photoUrl,
+      pref_tags: prefTags,
     })
 
     setSaving(false)
@@ -482,7 +486,42 @@ export function ProductForm({
             </div>
           )}
         </div>
-
+          {/* Preference Tags */}
+        {config.preferences.length > 0 && (
+          <div>
+            <label className={labelCls}>
+              Preference Tags
+              <span className="normal-case font-normal text-gray-400 ml-1">
+                (helps quiz matching)
+              </span>
+            </label>
+            <p className="text-xs text-gray-400 mb-2">
+              Tag this product so customers find it via the preference quiz
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {config.preferences.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPrefTags((prev) =>
+                    prev.includes(p)
+                      ? prev.filter((t) => t !== p)
+                      : [...prev, p]
+                  )}
+                  className={cn(
+                    'text-xs px-3 py-1.5 rounded-full border transition-colors',
+                    prefTags.includes(p)
+                      ? 'text-white border-transparent'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-500',
+                  )}
+                  style={prefTags.includes(p) ? { background: config.color } : {}}
+                >
+                  {prefTags.includes(p) ? '✓ ' : '+ '}{p}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* ── Active Toggle ── */}
         <div className="flex items-center justify-between bg-gray-50
           dark:bg-gray-800 rounded-xl px-4 py-3">

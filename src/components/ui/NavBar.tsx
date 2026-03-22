@@ -19,7 +19,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Products',  icon: '🧴', href: '/products'   },
   { label: 'Orders',    icon: '📦', href: '/orders'     },
   { label: 'Customers', icon: '👥', href: '/customers'  },
-   { label: 'Settings',  icon: '⚙️', href: '/settings'  }, // ← ADD
+  { label: 'Settings',  icon: '⚙️', href: '/settings'  }, 
+  { label: 'Upgrade',   icon: '⚡', href: '/upgrade'   },// ← ADD
 ]
 
 // ── Component ──────────────────────────────────────────────
