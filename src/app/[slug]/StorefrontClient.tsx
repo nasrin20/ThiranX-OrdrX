@@ -30,17 +30,9 @@ interface RazorpayOptions {
   }
 }
 /*added this to global.d.ts for Razorpay types, but keeping here for reference */
-interface RazorpayInstance {
-  open(): void
-}
-
-interface RazorpayConstructor {
-  new (options: RazorpayOptions): RazorpayInstance
-}
-
 declare global {
   interface Window {
-    Razorpay: RazorpayConstructor
+    Razorpay: new (options: RazorpayOptions) => { open: () => void }
   }
 }
 /*declare global {
