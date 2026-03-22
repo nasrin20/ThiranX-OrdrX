@@ -236,7 +236,7 @@ export default function ProductsPage() {
             <span>
               🔒 You&apos;ve reached your free plan limit ({planLimit} products).
             </span>
-            // Replace with:
+            
             <Button
               variant="primary"
               size="sm"

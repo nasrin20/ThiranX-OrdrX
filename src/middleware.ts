@@ -51,7 +51,9 @@ export async function middleware(request: NextRequest) {
 
   const isAuthPage =
     path === '/login' ||
-    path === '/signup'
+    path === '/signup'|| 
+    path === '/forgot-password' ||  
+    path === '/reset-password'       
 
   // Not logged in → redirect to login
   if (!user && isDashboardPage) {
