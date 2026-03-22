@@ -29,12 +29,28 @@ interface RazorpayOptions {
     ondismiss: () => void
   }
 }
+/*added this to global.d.ts for Razorpay types, but keeping here for reference */
+interface RazorpayInstance {
+  open(): void
+}
+
+interface RazorpayConstructor {
+  new (options: RazorpayOptions): RazorpayInstance
+}
 
 declare global {
   interface Window {
-    Razorpay: new (options: any) => { open: () => void }
+    Razorpay: RazorpayConstructor
   }
 }
+/*declare global {
+  interface Window {
+    Razorpay: new (options: any) => { open: () => void }
+    //  Razorpay: {
+    //   new (options: RazorpayOptions): { open: () => void }
+    // }
+  }
+}*/
 
 // ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
