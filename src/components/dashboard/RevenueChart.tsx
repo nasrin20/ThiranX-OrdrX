@@ -57,9 +57,9 @@ export function RevenueChart({ data }: RevenueChartProps) {
 
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+          {/* <h3 className="text-sm font-bold text-gray-900 dark:text-white">
             📈 Revenue — Last 7 Days
-          </h3>
+          </h3> */}
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
             Paid orders only
           </p>

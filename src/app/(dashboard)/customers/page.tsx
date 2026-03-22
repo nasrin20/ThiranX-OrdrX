@@ -209,7 +209,9 @@ export default function CustomersPage() {
     // Build stats per customer
     const withStats: CustomerWithStats[] = rawCustomers.map((c) => {
       const cOrders = rawOrders.filter((o) => o.customer_id === c.id)
-      const paid    = cOrders.filter((o) => o.status === 'paid')
+      const paid = cOrders.filter((o) => 
+        o.status === 'paid' || o.status === 'shipped'
+      )
       const last    = cOrders.sort((a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )[0]

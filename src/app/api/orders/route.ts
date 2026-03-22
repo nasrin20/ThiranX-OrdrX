@@ -1,17 +1,16 @@
 // OrdrX — Secure Orders API Route
-// Supports multiple cart items in one order
+// Saves order after payment verification
 
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendNewOrderEmail } from '@/lib/email'
 
-// ── Service role client ────────────────────────────────────
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-// ── Types ──────────────────────────────────────────────────
 interface CartItemRequest {
   product_id: string
   variant:    string | null
@@ -20,19 +19,21 @@ interface CartItemRequest {
 }
 
 interface OrderRequest {
-  business_id:    string
-  customer_name:  string
-  customer_phone: string
-  items:          CartItemRequest[]
-  total_amount:   number
-  notes:          string | null
+  business_id:         string
+  customer_name:       string
+  customer_phone:      string
+  items:               CartItemRequest[]
+  total_amount:        number
+  notes:               string | null
+  // Razorpay payment fields
+  razorpay_order_id:   string | null
+  razorpay_payment_id: string | null
+  razorpay_signature:  string | null
 }
 
-// ── Generate order ref ─────────────────────────────────────
 const generateRef = (): string =>
   'ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase()
 
-// ── POST ───────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body: OrderRequest = await req.json()
@@ -44,14 +45,29 @@ export async function POST(req: NextRequest) {
       items,
       total_amount,
       notes,
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
     } = body
 
-    // ── Validate ───────────────────────────────────────────
     if (!business_id || !customer_name || !customer_phone || !items?.length) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
+    }
+
+    // ── Verify Razorpay signature if payment provided ──────
+    let paymentVerified = false
+
+    if (razorpay_order_id && razorpay_payment_id && razorpay_signature) {
+      const body     = `${razorpay_order_id}|${razorpay_payment_id}`
+      const expected = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+        .update(body)
+        .digest('hex')
+
+      paymentVerified = expected === razorpay_signature
     }
 
     // ── Get business ───────────────────────────────────────
@@ -63,10 +79,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (bizError || !business) {
-      return NextResponse.json(
-        { error: 'Business not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Business not found' }, { status: 404 })
     }
 
     // ── Get seller email ───────────────────────────────────
@@ -77,33 +90,26 @@ export async function POST(req: NextRequest) {
       sellerEmail = user?.email ?? null
     }
 
-    // ── Verify all products + check stock ──────────────────
+    // ── Verify products + stock ────────────────────────────
     const productIds = items.map((i) => i.product_id)
-    const { data: products, error: prodError } = await supabaseAdmin
+    const { data: products } = await supabaseAdmin
       .from('products')
       .select('id, name, stock, active, price')
       .in('id', productIds)
       .eq('active', true)
 
-    if (prodError || !products || products.length !== items.length) {
+    if (!products || products.length !== items.length) {
       return NextResponse.json(
         { error: 'One or more products not found' },
         { status: 404 }
       )
     }
 
-    // Check stock for each item
     for (const item of items) {
       const product = products.find((p) => p.id === item.product_id)
-      if (!product) {
+      if (!product || product.stock < item.quantity) {
         return NextResponse.json(
-          { error: `Product not found` },
-          { status: 404 }
-        )
-      }
-      if (product.stock < item.quantity) {
-        return NextResponse.json(
-          { error: `Not enough stock for ${product.name}` },
+          { error: `Not enough stock for ${product?.name ?? 'product'}` },
           { status: 400 }
         )
       }
@@ -131,10 +137,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Create order ───────────────────────────────────────
-    const ref = generateRef()
-
-    // Use first item as primary product for backward compat
-    const firstItem = items[0]
+    const ref        = generateRef()
+    const firstItem  = items[0]
+    const orderStatus = paymentVerified ? 'paid' : 'pending'
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -146,7 +151,8 @@ export async function POST(req: NextRequest) {
         variant:     firstItem.variant || null,
         quantity:    items.reduce((s, i) => s + i.quantity, 0),
         amount:      total_amount,
-        status:      'pending',
+        status:      orderStatus,
+        payment_id:  razorpay_payment_id || null,
         notes:       notes?.trim() || null,
       })
       .select()
@@ -159,20 +165,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Create order items ─────────────────────────────────
-    const orderItems = items.map((item) => ({
-      order_id:   order.id,
-      product_id: item.product_id,
-      variant:    item.variant || null,
-      quantity:   item.quantity,
-      price:      item.price,
-    }))
-
+    // ── Save order items ───────────────────────────────────
     await supabaseAdmin
       .from('order_items')
-      .insert(orderItems)
+      .insert(items.map((item) => ({
+        order_id:   order.id,
+        product_id: item.product_id,
+        variant:    item.variant || null,
+        quantity:   item.quantity,
+        price:      item.price,
+      })))
 
-    // ── Reduce stock for all items ─────────────────────────
+    // ── Reduce stock ───────────────────────────────────────
     for (const item of items) {
       const product = products.find((p) => p.id === item.product_id)
       if (product) {
@@ -188,7 +192,7 @@ export async function POST(req: NextRequest) {
       const itemSummary = items
         .map((item) => {
           const p = products.find((pr) => pr.id === item.product_id)
-          return `${p?.name ?? 'Product'}${item.variant ? ` (${item.variant})` : ''} x${item.quantity}`
+          return `${p?.name ?? 'Product'}${item.variant ? ` (${item.variant})` : ''} ×${item.quantity}`
         })
         .join(', ')
 
@@ -207,11 +211,11 @@ export async function POST(req: NextRequest) {
       }).catch(console.error)
     }
 
-    // ── Return success ─────────────────────────────────────
     return NextResponse.json({
-      success:   true,
-      order_ref: ref,
-      order_id:  order.id,
+      success:        true,
+      order_ref:      ref,
+      order_id:       order.id,
+      payment_status: orderStatus,
     })
 
   } catch (err) {

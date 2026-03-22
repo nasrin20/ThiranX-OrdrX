@@ -1,11 +1,40 @@
 'use client'
 
-// OrdrX — Storefront Client with Preference Quiz + Cart
+// OrdrX — Storefront Client with Razorpay Payment
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Business, Product, BusinessType, CartItem, PrefQuestion } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
 import { matchProducts, PrefAnswer } from '@/constants/preferences'
+
+// ── Razorpay types ─────────────────────────────────────────
+interface RazorpayOptions {
+  key:         string
+  amount:      number
+  currency:    string
+  name:        string
+  description: string
+  order_id:    string
+  prefill: {
+    name:    string
+    contact: string
+  }
+  theme:   { color: string }
+  handler: (response: {
+    razorpay_order_id:   string
+    razorpay_payment_id: string
+    razorpay_signature:  string
+  }) => void
+  modal: {
+    ondismiss: () => void
+  }
+}
+
+declare global {
+  interface Window {
+    Razorpay: new (options: RazorpayOptions) => { open: () => void }
+  }
+}
 
 // ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
@@ -40,14 +69,23 @@ const getHeaderStyle = (color: string, bg: string): React.CSSProperties => {
 const getTextColor = (bg: string, color: string): string =>
   bg === 'soft' ? color : '#ffffff'
 
+// ── Load Razorpay script ───────────────────────────────────
+const loadRazorpay = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) { resolve(true); return }
+    const script    = document.createElement('script')
+    script.src      = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.onload   = () => resolve(true)
+    script.onerror  = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
+
 // ── Product Thumbnail ──────────────────────────────────────
 function ProductThumbnail({
   photoUrl, emoji, name, color,
 }: {
-  photoUrl: string | null
-  emoji:    string
-  name:     string
-  color:    string
+  photoUrl: string | null; emoji: string; name: string; color: string
 }) {
   if (photoUrl) {
     return (
@@ -85,13 +123,13 @@ function ProductCard({
   product, color, cartItem, recommended,
   onSelect, onAddToCart, onUpdateQty,
 }: {
-  product:     Product
-  color:       string
-  cartItem?:   CartItem
+  product:      Product
+  color:        string
+  cartItem?:    CartItem
   recommended?: boolean
-  onSelect:    (p: Product) => void
-  onAddToCart: (p: Product) => void
-  onUpdateQty: (productId: string, delta: number) => void
+  onSelect:     (p: Product) => void
+  onAddToCart:  (p: Product) => void
+  onUpdateQty:  (productId: string, delta: number) => void
 }) {
   const discount = getDiscount(product.price, product.mrp ?? null)
   const inCart   = !!cartItem
@@ -105,44 +143,30 @@ function ProductCard({
       <div className="h-36 relative overflow-hidden cursor-pointer"
         style={{ background: `${color}15` }}
         onClick={() => onSelect(product)}>
-        <ProductThumbnail
-          photoUrl={product.photo_url ?? null}
-          emoji={product.emoji}
-          name={product.name}
-          color={color}
-        />
+        <ProductThumbnail photoUrl={product.photo_url ?? null}
+          emoji={product.emoji} name={product.name} color={color} />
         {product.tag && (
           <span className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: color, color: '#fff' }}>
-            {product.tag}
-          </span>
+            style={{ background: color, color: '#fff' }}>{product.tag}</span>
         )}
         {recommended && !inCart && (
           <span className="absolute top-2 right-2 text-xs font-bold px-2 py-0.5
-            rounded-full bg-green-500 text-white">
-            ✨ Match
-          </span>
+            rounded-full bg-green-500 text-white">✨ Match</span>
         )}
         {inCart && (
           <div className="absolute top-2 right-2 w-6 h-6 rounded-full
             flex items-center justify-center text-white text-xs font-bold"
-            style={{ background: color }}>
-            {cartQty}
-          </div>
+            style={{ background: color }}>{cartQty}</div>
         )}
       </div>
 
       <div className="p-3">
         <h3 className="text-sm font-bold text-gray-900 dark:text-white
           leading-tight mb-1 truncate cursor-pointer"
-          onClick={() => onSelect(product)}>
-          {product.name}
-        </h3>
-
+          onClick={() => onSelect(product)}>{product.name}</h3>
         {product.description && (
           <p className="text-xs text-gray-400 mb-2 line-clamp-1">{product.description}</p>
         )}
-
         {product.variants.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {product.variants.slice(0, 2).map((v) => (
@@ -154,7 +178,6 @@ function ProductCard({
             )}
           </div>
         )}
-
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
           <span className="text-sm font-bold" style={{ color }}>
             {formatPrice(product.price)}
@@ -172,7 +195,7 @@ function ProductCard({
         {!inCart ? (
           <button type="button"
             onClick={() => product.variants.length > 0 ? onSelect(product) : onAddToCart(product)}
-            className="w-full py-2 rounded-xl text-white text-xs font-bold transition-all"
+            className="w-full py-2 rounded-xl text-white text-xs font-bold"
             style={{ background: color }}>
             + Add to Cart
           </button>
@@ -182,9 +205,7 @@ function ProductCard({
               className="w-8 h-8 rounded-full border-2 text-sm font-bold
                 flex items-center justify-center"
               style={{ borderColor: color, color }}>−</button>
-            <span className="text-sm font-bold" style={{ color }}>
-              {cartQty} in cart
-            </span>
+            <span className="text-sm font-bold" style={{ color }}>{cartQty} in cart</span>
             <button type="button" onClick={() => onUpdateQty(product.id, 1)}
               className="w-8 h-8 rounded-full text-white text-sm font-bold
                 flex items-center justify-center"
@@ -215,10 +236,10 @@ function CartBar({ cart, color, onCheckout }: {
         <div className="flex items-center gap-2">
           <span className="bg-white/20 rounded-full w-7 h-7
             flex items-center justify-center text-sm">{totalItems}</span>
-          <span className="text-sm">{totalItems} item{totalItems > 1 ? 's' : ''} in cart</span>
+          <span className="text-sm">{totalItems} item{totalItems > 1 ? 's' : ''}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-base">{formatPrice(totalAmount)}</span>
+          <span>{formatPrice(totalAmount)}</span>
           <span>→</span>
         </div>
       </button>
@@ -238,20 +259,18 @@ function PreferenceQuiz({
   const [currentQ, setCurrentQ] = useState(0)
   const [answers,  setAnswers]  = useState<Record<string, string[]>>({})
 
-  const question  = questions[currentQ]
-  const isLastQ   = currentQ === questions.length - 1
-  const isFirstQ  = currentQ === 0
-  const progress  = ((currentQ) / questions.length) * 100
-  const selected  = answers[question.id] ?? []
-  const hasAnswer = selected.length > 0
+  const question = questions[currentQ]
+  const isLastQ  = currentQ === questions.length - 1
+  const isFirstQ = currentQ === 0
+  const progress = (currentQ / questions.length) * 100
+  const selected = answers[question.id] ?? []
 
   const toggleOption = (opt: string) => {
     setAnswers((prev) => {
       const current = prev[question.id] ?? []
-      const exists  = current.includes(opt)
       return {
         ...prev,
-        [question.id]: exists
+        [question.id]: current.includes(opt)
           ? current.filter((o) => o !== opt)
           : [...current, opt],
       }
@@ -260,7 +279,6 @@ function PreferenceQuiz({
 
   const handleNext = () => {
     if (isLastQ) {
-      // Convert to PrefAnswer array
       const flat: PrefAnswer[] = Object.entries(answers).flatMap(
         ([questionId, opts]) => opts.map((answer) => ({ questionId, answer }))
       )
@@ -272,50 +290,38 @@ function PreferenceQuiz({
 
   return (
     <div className="max-w-md mx-auto px-4 py-6">
-
-      {/* Progress */}
       <div className="flex items-center gap-3 mb-8">
-        <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700
-          rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-500"
             style={{ width: `${progress}%`, background: color }} />
         </div>
-        <span className="text-xs text-gray-400 flex-shrink-0">
-          {currentQ + 1}/{questions.length}
-        </span>
+        <span className="text-xs text-gray-400">{currentQ + 1}/{questions.length}</span>
       </div>
 
-      {/* Question */}
       <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
         {question.question}
       </h2>
-      <p className="text-sm text-gray-400 mb-6">
-        Select all that apply
-      </p>
+      <p className="text-sm text-gray-400 mb-6">Select all that apply</p>
 
-      {/* Options — multi select */}
       <div className="grid grid-cols-2 gap-3 mb-8">
         {question.options.map((opt) => {
           const isSelected = selected.includes(opt)
           return (
-            <button key={opt} type="button"
-              onClick={() => toggleOption(opt)}
+            <button key={opt} type="button" onClick={() => toggleOption(opt)}
               className="p-4 rounded-2xl border-2 text-sm font-semibold
-                transition-all active:scale-[0.98] text-left flex items-center gap-2"
+                transition-all text-left flex items-center gap-2"
               style={{
                 background:  isSelected ? `${color}15` : 'transparent',
                 borderColor: isSelected ? color : '#e5e7eb',
                 color:       isSelected ? color : undefined,
               }}>
               <div className="w-5 h-5 rounded-full border-2 flex items-center
-                justify-center flex-shrink-0 transition-all"
+                justify-center flex-shrink-0"
                 style={{
                   borderColor: isSelected ? color : '#d1d5db',
                   background:  isSelected ? color : 'transparent',
                 }}>
-                {isSelected && (
-                  <span className="text-white text-xs font-bold">✓</span>
-                )}
+                {isSelected && <span className="text-white text-xs">✓</span>}
               </div>
               {opt}
             </button>
@@ -323,21 +329,16 @@ function PreferenceQuiz({
         })}
       </div>
 
-      {/* Navigation */}
       <div className="flex gap-3">
         {!isFirstQ && (
-          <button type="button"
-            onClick={() => setCurrentQ((q) => q - 1)}
+          <button type="button" onClick={() => setCurrentQ((q) => q - 1)}
             className="flex-1 py-3 rounded-2xl border-2 text-sm font-bold
-              transition-colors text-gray-500 dark:text-gray-400
-              border-gray-200 dark:border-gray-700">
+              text-gray-500 border-gray-200 dark:border-gray-700">
             ← Back
           </button>
         )}
-
-        <button type="button"
-          onClick={handleNext}
-          disabled={!hasAnswer}
+        <button type="button" onClick={handleNext}
+          disabled={selected.length === 0}
           className="flex-1 py-3 rounded-2xl text-white text-sm font-bold
             transition-all disabled:opacity-40"
           style={{ background: color }}>
@@ -345,10 +346,8 @@ function PreferenceQuiz({
         </button>
       </div>
 
-      {/* Skip */}
       <button type="button" onClick={onSkip}
-        className="w-full text-center text-xs text-gray-400
-          hover:text-gray-600 mt-4">
+        className="w-full text-center text-xs text-gray-400 hover:text-gray-600 mt-4">
         Skip — Show all products
       </button>
     </div>
@@ -364,22 +363,19 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const headerStyle = getHeaderStyle(color, bg)
   const textColor   = getTextColor(bg, color)
   const isLight     = bg === 'soft'
+  const hasQuiz     = (business.pref_questions ?? []).length > 0
 
-  // ── Has preference questions? ─────────────────────────
-  const hasQuiz = (business.pref_questions ?? []).length > 0
-
-  // ── State ────────────────────────────────────────────────
-  const [screen,    setScreen]    = useState<Screen>('shop')
-  const [selected,  setSelected]  = useState<Product | null>(null)
-  const [orderRef,  setOrderRef]  = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [error,     setError]     = useState<string | null>(null)
-  const [cart,      setCart]      = useState<CartItem[]>([])
-  const [answers,   setAnswers]   = useState<PrefAnswer[]>([])
-  const [quizDone,  setQuizDone]  = useState(false)
-
+  const [screen,        setScreen]        = useState<Screen>('shop')
+  const [selected,      setSelected]      = useState<Product | null>(null)
+  const [orderRef,      setOrderRef]      = useState('')
+  const [loading,       setLoading]       = useState(false)
+  const [error,         setError]         = useState<string | null>(null)
+  const [cart,          setCart]          = useState<CartItem[]>([])
+  const [answers,       setAnswers]       = useState<PrefAnswer[]>([])
+  const [quizDone,      setQuizDone]      = useState(false)
   const [detailVariant, setDetailVariant] = useState('')
   const [detailQty,     setDetailQty]     = useState(1)
+  const [paymentDone,   setPaymentDone]   = useState(false)
 
   const [form, setForm] = useState<OrderForm>({
     customerName: '', customerPhone: '', note: '',
@@ -388,13 +384,15 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const updateForm = (field: keyof OrderForm, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }))
 
-  // ── Sorted/filtered products based on quiz answers ────
+  // ── Preload Razorpay ──────────────────────────────────────
+  useEffect(() => { loadRazorpay() }, [])
+
+  // ── Filtered products ─────────────────────────────────────
   const displayProducts = useMemo(() => {
     if (!quizDone || !answers.length) return products
     return matchProducts(products, answers)
   }, [products, answers, quizDone])
 
-  // Which products are "recommended" (matched)
   const recommendedIds = useMemo(() => {
     if (!quizDone || !answers.length) return new Set<string>()
     const answerValues = answers.map((a) => a.answer.toLowerCase())
@@ -407,8 +405,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         .map((p) => p.id)
     )
   }, [products, answers, quizDone])
-
-  const matchCount = recommendedIds.size
 
   // ── Cart helpers ──────────────────────────────────────────
   const totalAmount = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
@@ -453,25 +449,39 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setScreen('shop')
   }
 
-  // ── Quiz handlers ─────────────────────────────────────────
-  const handleQuizComplete = (newAnswers: PrefAnswer[]) => {
-    setAnswers(newAnswers)
-    setQuizDone(true)
-    setScreen('shop')
+  // ── Save order to database ─────────────────────────────────
+  const saveOrder = async (
+    paymentData: {
+      razorpay_order_id:   string
+      razorpay_payment_id: string
+      razorpay_signature:  string
+    } | null
+  ) => {
+    const response = await fetch('/api/orders', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business_id:    business.id,
+        customer_name:  form.customerName.trim(),
+        customer_phone: form.customerPhone.trim(),
+        items: cart.map((i) => ({
+          product_id: i.product.id,
+          variant:    i.variant || null,
+          quantity:   i.quantity,
+          price:      i.product.price,
+        })),
+        total_amount:        totalAmount,
+        notes:               form.note.trim() || null,
+        razorpay_order_id:   paymentData?.razorpay_order_id   ?? null,
+        razorpay_payment_id: paymentData?.razorpay_payment_id ?? null,
+        razorpay_signature:  paymentData?.razorpay_signature  ?? null,
+      }),
+    })
+
+    return response.json()
   }
 
-  const handleQuizSkip = () => {
-    setAnswers([])
-    setQuizDone(false)
-    setScreen('shop')
-  }
-
-  const resetQuiz = () => {
-    setAnswers([])
-    setQuizDone(false)
-  }
-
-  // ── Place order ───────────────────────────────────────────
+  // ── Place order with Razorpay ─────────────────────────────
   const placeOrder = async () => {
     if (!form.customerName.trim() || !form.customerPhone.trim()) {
       setError('Please fill in your name and WhatsApp number.')
@@ -483,12 +493,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setError(null)
 
     try {
-      const response = await fetch('/api/orders', {
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch('/api/storefront-order', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          business_id:    business.id,
-          customer_name:  form.customerName.trim(),
+          business_id:   business.id,
+          customer_name: form.customerName.trim(),
           customer_phone: form.customerPhone.trim(),
           items: cart.map((i) => ({
             product_id: i.product.id,
@@ -501,21 +512,69 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         }),
       })
 
-      const data = await response.json()
+      const orderData = await orderRes.json()
 
-      if (!response.ok || !data.success) {
-        setError(data.error ?? 'Failed to place order.')
+      if (!orderData.success) {
+        setError(orderData.error ?? 'Failed to initiate payment.')
         setLoading(false)
         return
       }
 
-      setOrderRef(data.order_ref)
-      setScreen('confirmed')
+      setLoading(false)
+
+      // Step 2: Open Razorpay checkout
+      const loaded = await loadRazorpay()
+      if (!loaded) {
+        setError('Failed to load payment gateway. Please try again.')
+        return
+      }
+
+      const rzp = new window.Razorpay({
+        key:         orderData.key_id,
+        amount:      orderData.amount,
+        currency:    orderData.currency,
+        name:        business.name,
+        description: `Order from ${business.name}`,
+        order_id:    orderData.razorpay_order_id,
+        prefill: {
+          name:    form.customerName.trim(),
+          contact: form.customerPhone.trim(),
+        },
+        theme: { color },
+        handler: async (response) => {
+          setLoading(true)
+
+          // Step 3: Save order with payment details
+          const saveData = await saveOrder({
+            razorpay_order_id:   response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature:  response.razorpay_signature,
+          })
+
+          if (saveData.success) {
+            setOrderRef(saveData.order_ref)
+            setPaymentDone(true)
+            setScreen('confirmed')
+          } else {
+            setError(saveData.error ?? 'Order failed after payment. Contact support.')
+          }
+
+          setLoading(false)
+        },
+        modal: {
+          ondismiss: () => {
+            setError('Payment cancelled. Please try again.')
+            setLoading(false)
+          },
+        },
+      })
+
+      rzp.open()
+
     } catch {
       setError('Something went wrong. Please try again.')
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const inputCls = [
@@ -525,14 +584,12 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     'border-gray-200 dark:border-gray-700',
   ].join(' ')
 
-  // ── Render ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="px-4 pt-10 pb-6 text-center relative overflow-hidden"
         style={headerStyle}>
-
         {(screen === 'detail' || screen === 'checkout' || screen === 'quiz') && (
           <button type="button" aria-label="Go back"
             onClick={() => setScreen('shop')}
@@ -542,11 +599,8 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
         <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3
           border-2 bg-white/20" style={{ borderColor: `${textColor}44` }}>
-          <StoreAvatar
-            logoUrl={business.logo_url ?? null}
-            name={business.name}
-            emoji={config.emoji}
-          />
+          <StoreAvatar logoUrl={business.logo_url ?? null}
+            name={business.name} emoji={config.emoji} />
         </div>
 
         <h1 className="text-xl font-bold mb-1" style={{ color: textColor }}>
@@ -555,7 +609,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         <p className="text-sm mb-2" style={{ color: `${textColor}99` }}>
           @{business.slug}
         </p>
-
         {business.bio && (
           <p className="text-sm max-w-xs mx-auto mb-3" style={{ color: `${textColor}cc` }}>
             {business.bio}
@@ -586,28 +639,26 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="max-w-md mx-auto px-4 py-6 pb-32">
 
-        {/* ── QUIZ SCREEN ── */}
+        {/* Quiz */}
         {screen === 'quiz' && hasQuiz && (
           <PreferenceQuiz
             questions={business.pref_questions}
             color={color}
-            onComplete={handleQuizComplete}
-            onSkip={handleQuizSkip}
+            onComplete={(a) => { setAnswers(a); setQuizDone(true); setScreen('shop') }}
+            onSkip={() => { setAnswers([]); setQuizDone(false); setScreen('shop') }}
           />
         )}
 
-        {/* ── SHOP ── */}
+        {/* Shop */}
         {screen === 'shop' && (
           <>
-            {/* Quiz CTA — only show if business has questions */}
             {hasQuiz && !quizDone && (
-              <button type="button"
-                onClick={() => setScreen('quiz')}
+              <button type="button" onClick={() => setScreen('quiz')}
                 className="w-full mb-4 py-4 rounded-2xl border-2 text-sm font-bold
-                  transition-all flex items-center justify-between px-5"
+                  flex items-center justify-between px-5"
                 style={{ borderColor: color, color }}>
                 <div className="flex items-center gap-2">
                   <span className="text-xl">🎯</span>
@@ -622,22 +673,20 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               </button>
             )}
 
-            {/* Quiz results banner */}
             {quizDone && (
               <div className="mb-4 px-4 py-3 rounded-2xl flex items-center justify-between"
                 style={{ background: `${color}15` }}>
                 <div>
                   <p className="text-sm font-bold" style={{ color }}>
-                    ✨ {matchCount > 0 ? `${matchCount} products match your taste!` : 'Showing all products'}
+                    ✨ {recommendedIds.size > 0
+                      ? `${recommendedIds.size} products match your taste!`
+                      : 'Showing all products'}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Based on your preferences
-                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">Based on your preferences</p>
                 </div>
-                <button type="button" onClick={resetQuiz}
-                  className="text-xs text-gray-400 hover:text-gray-600 underline">
-                  Reset
-                </button>
+                <button type="button"
+                  onClick={() => { setAnswers([]); setQuizDone(false) }}
+                  className="text-xs text-gray-400 underline">Reset</button>
               </div>
             )}
 
@@ -653,16 +702,12 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {displayProducts.map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    color={color}
+                  <ProductCard key={p.id} product={p} color={color}
                     cartItem={getCartItem(p.id)}
                     recommended={quizDone && recommendedIds.has(p.id)}
                     onSelect={openDetail}
                     onAddToCart={(prod) => addToCart(prod, '', 1)}
-                    onUpdateQty={updateQty}
-                  />
+                    onUpdateQty={updateQty} />
                 ))}
               </div>
             )}
@@ -678,19 +723,14 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
           </>
         )}
 
-        {/* ── DETAIL ── */}
+        {/* Detail */}
         {screen === 'detail' && selected && (
           <div>
             <div className="h-56 rounded-2xl overflow-hidden mb-4"
               style={{ background: `${color}15` }}>
-              <ProductThumbnail
-                photoUrl={selected.photo_url ?? null}
-                emoji={selected.emoji}
-                name={selected.name}
-                color={color}
-              />
+              <ProductThumbnail photoUrl={selected.photo_url ?? null}
+                emoji={selected.emoji} name={selected.name} color={color} />
             </div>
-
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
               {selected.name}
             </h2>
@@ -748,18 +788,15 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             <button type="button" onClick={addDetailToCart}
               className="w-full py-4 rounded-2xl text-white text-base font-bold
                 transition-all active:scale-[0.98]"
-              style={{ background: color }}>
-              🛒 Add to Cart
-            </button>
+              style={{ background: color }}>🛒 Add to Cart</button>
             <button type="button" onClick={() => setScreen('shop')}
-              className="w-full py-3 text-sm font-semibold mt-2"
-              style={{ color }}>
+              className="w-full py-3 text-sm font-semibold mt-2" style={{ color }}>
               ← Continue Shopping
             </button>
           </div>
         )}
 
-        {/* ── CHECKOUT ── */}
+        {/* Checkout */}
         {screen === 'checkout' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -767,13 +804,11 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                   Your Order
                 </h2>
-                <p className="text-sm text-gray-500 mt-0.5">Review and confirm</p>
+                <p className="text-sm text-gray-500 mt-0.5">Review and pay</p>
               </div>
               <button type="button" onClick={() => setScreen('shop')}
                 className="text-sm font-bold px-3 py-1.5 rounded-xl border-2"
-                style={{ borderColor: color, color }}>
-                ✏️ Edit Cart
-              </button>
+                style={{ borderColor: color, color }}>✏️ Edit</button>
             </div>
 
             {/* Cart items */}
@@ -782,17 +817,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
                   className="flex items-center gap-3 py-2 border-b
-                    border-gray-100 dark:border-gray-800 last:border-0">
+                    border-gray-100 last:border-0">
                   <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-                    <ProductThumbnail
-                      photoUrl={item.product.photo_url ?? null}
-                      emoji={item.product.emoji}
-                      name={item.product.name}
-                      color={color}
-                    />
+                    <ProductThumbnail photoUrl={item.product.photo_url ?? null}
+                      emoji={item.product.emoji} name={item.product.name} color={color} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                    <p className="text-xs font-bold text-gray-900 truncate">
                       {item.product.name}{item.variant ? ` · ${item.variant}` : ''}
                     </p>
                     <p className="text-xs text-gray-400">
@@ -809,7 +840,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 </div>
               ))}
               <div className="flex justify-between items-center pt-3 mt-1">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                <span className="text-sm font-bold text-gray-700">
                   Total ({totalItems} items)
                 </span>
                 <span className="text-xl font-bold" style={{ color }}>
@@ -827,7 +858,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
             )}
 
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3 mb-6">
               <input type="text" value={form.customerName}
                 onChange={(e) => updateForm('customerName', e.target.value)}
                 placeholder="Your full name" className={inputCls} />
@@ -845,50 +876,66 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 rows={2} className={inputCls + ' resize-none'} />
             </div>
 
+            {/* Pay button */}
             <button type="button" onClick={placeOrder} disabled={loading}
               className="w-full py-4 rounded-2xl text-white text-base font-bold
-                transition-all disabled:opacity-50 active:scale-[0.98]"
+                transition-all disabled:opacity-50 active:scale-[0.98]
+                flex items-center justify-center gap-2"
               style={{ background: color }}>
-              {loading ? 'Placing order...' : `Confirm Order — ${formatPrice(totalAmount)}`}
+              {loading ? (
+                'Processing...'
+              ) : (
+                <>
+                  <span>Pay {formatPrice(totalAmount)}</span>
+                  <span className="text-xs opacity-70">via Razorpay</span>
+                </>
+              )}
             </button>
+
             <p className="text-center text-xs text-gray-400 mt-3">
-              Seller will contact you on WhatsApp to confirm payment
+              🔒 Secure payment via Razorpay · UPI, Cards, Netbanking
             </p>
           </div>
         )}
 
-        {/* ── CONFIRMED ── */}
+        {/* Confirmed */}
         {screen === 'confirmed' && (
           <div className="text-center">
             <div className="w-20 h-20 rounded-full flex items-center justify-center
-              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>✅</div>
+              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>
+              {paymentDone ? '✅' : '🎉'}
+            </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
               Order Confirmed! 🎉
             </h2>
+            <p className="text-sm text-gray-500 mb-2">
+              {paymentDone
+                ? '✅ Payment successful!'
+                : `${business.name} will contact you on WhatsApp.`}
+            </p>
             <p className="text-sm text-gray-500 mb-6">
-              {business.name} will contact you on WhatsApp soon.
+              {business.name} will process your order soon.
             </p>
 
             <div className="bg-white dark:bg-gray-900 rounded-2xl border
               border-gray-100 dark:border-gray-800 p-4 text-left mb-4">
-              <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-xs text-gray-400">Order Ref</span>
-                <span className="text-xs font-bold text-gray-900 dark:text-white">{orderRef}</span>
+                <span className="text-xs font-bold text-gray-900">{orderRef}</span>
               </div>
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
-                  className="flex justify-between py-2 border-b
-                    border-gray-100 dark:border-gray-800 last:border-0">
+                  className="flex justify-between py-2 border-b border-gray-100 last:border-0">
                   <span className="text-xs text-gray-400 truncate flex-1 mr-2">
                     {item.product.name}{item.variant ? ` · ${item.variant}` : ''} × {item.quantity}
                   </span>
-                  <span className="text-xs font-bold text-gray-900 dark:text-white flex-shrink-0">
+                  <span className="text-xs font-bold text-gray-900 flex-shrink-0">
                     {formatPrice(item.product.price * item.quantity)}
                   </span>
                 </div>
               ))}
               <div className="flex justify-between pt-3">
-                <span className="text-xs font-bold text-gray-500">Total</span>
+                <span className="text-xs font-bold text-gray-500">Total Paid</span>
                 <span className="text-sm font-bold" style={{ color }}>
                   {formatPrice(totalAmount)}
                 </span>
@@ -896,7 +943,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             </div>
 
             {business.whatsapp && (
-              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=Hi! I just placed order ${orderRef} on OrdrX. Total: ${formatPrice(totalAmount)}`}
+              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=Hi! I just paid and placed order ${orderRef} on OrdrX. Total: ${formatPrice(totalAmount)}`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2
                   bg-[#25D366] text-white rounded-2xl py-3 font-bold text-sm mb-3">
@@ -908,6 +955,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               onClick={() => {
                 setScreen('shop')
                 setCart([])
+                setPaymentDone(false)
                 setForm({ customerName: '', customerPhone: '', note: '' })
               }}
               className="text-sm font-semibold" style={{ color }}>
@@ -918,7 +966,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
       </div>
 
-      {/* ── Floating Cart Bar ── */}
+      {/* Cart Bar */}
       {screen === 'shop' && (
         <CartBar cart={cart} color={color} onCheckout={() => setScreen('checkout')} />
       )}
