@@ -1,7 +1,7 @@
 'use client'
 
 // OrdrX — Reset Password Page
-// User lands here after clicking email link
+// Handles token from URL hash fragment
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -12,25 +12,67 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
   const router   = useRouter()
 
-  const [password,  setPassword]  = useState('')
-  const [confirm,   setConfirm]   = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [done,      setDone]      = useState(false)
-  const [error,     setError]     = useState<string | null>(null)
-  const [ready,     setReady]     = useState(false)
+  const [password, setPassword] = useState('')
+  const [confirm,  setConfirm]  = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [done,     setDone]     = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+  const [ready,    setReady]    = useState(false)
+  const [checking, setChecking] = useState(true)
 
-  // ── Check if user came from email link ─────────────────
+  // ── Check session from URL hash ────────────────────────
+  useEffect(() => {
+    const handleSession = async () => {
+      // Supabase puts tokens in URL hash: #access_token=...&type=recovery
+      const hash   = window.location.hash
+      const params = new URLSearchParams(hash.replace('#', ''))
+      const type   = params.get('type')
+
+      if (type === 'recovery') {
+        // Exchange the tokens for a session
+        const accessToken  = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token:  accessToken,
+            refresh_token: refreshToken,
+          })
+
+          if (!sessionError) {
+            setReady(true)
+            setChecking(false)
+            return
+          }
+        }
+      }
+
+      // Also check if already in recovery state via auth state
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        setReady(true)
+      }
+
+      setChecking(false)
+    }
+
+    handleSession()
+  }, [supabase])
+
+  // ── Also listen for auth state change ─────────────────
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === 'PASSWORD_RECOVERY') {
           setReady(true)
+          setChecking(false)
         }
       }
     )
     return () => subscription.unsubscribe()
   }, [supabase])
 
+  // ── Handle reset ───────────────────────────────────────
   const handleReset = async () => {
     if (!password.trim()) {
       setError('Please enter a new password.')
@@ -48,9 +90,7 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setError(null)
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      password,
-    })
+    const { error: updateError } = await supabase.auth.updateUser({ password })
 
     if (updateError) {
       setError(updateError.message)
@@ -60,8 +100,6 @@ export default function ResetPasswordPage() {
 
     setDone(true)
     setLoading(false)
-
-    // Redirect to dashboard after 2s
     setTimeout(() => router.push('/dashboard'), 2000)
   }
 
@@ -79,7 +117,6 @@ export default function ResetPasswordPage() {
       flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
-        {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-[#1a1a2e] dark:text-white">
             ⚡ OrdrX
@@ -90,33 +127,48 @@ export default function ResetPasswordPage() {
         <div className="bg-white dark:bg-gray-900 rounded-2xl border
           border-[#f0e8de] dark:border-gray-800 p-6">
 
-          {done ? (
+          {/* Checking state */}
+          {checking && (
+            <div className="text-center py-4">
+              <div className="text-3xl mb-3 animate-pulse">🔐</div>
+              <p className="text-sm text-gray-500">Verifying reset link...</p>
+            </div>
+          )}
+
+          {/* Success */}
+          {!checking && done && (
             <div className="text-center py-4">
               <div className="text-4xl mb-4">✅</div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
                 Password updated!
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500">
                 Redirecting to your dashboard...
               </p>
             </div>
+          )}
 
-          ) : !ready ? (
+          {/* Not ready — link expired or invalid */}
+          {!checking && !ready && !done && (
             <div className="text-center py-4">
-              <div className="text-4xl mb-4">🔐</div>
+              <div className="text-4xl mb-4">⚠️</div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                Reset your password
+                Link expired or invalid
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Please click the link in your email to continue.
+              <p className="text-sm text-gray-500 mb-6">
+                Reset links expire after 1 hour.
+                Please request a new one.
               </p>
               <Link href="/forgot-password"
-                className="text-sm text-[#b5860d] font-semibold hover:underline">
-                Resend reset email →
+                className="inline-block px-6 py-3 rounded-xl
+                  bg-[#b5860d] text-white font-bold text-sm">
+                Request new link →
               </Link>
             </div>
+          )}
 
-          ) : (
+          {/* Ready — show password form */}
+          {!checking && ready && !done && (
             <>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
                 Set new password
@@ -168,7 +220,7 @@ export default function ResetPasswordPage() {
                   disabled={loading}
                   className="w-full py-3 rounded-xl bg-[#b5860d] hover:bg-[#9a7209]
                     text-white font-bold text-sm transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled:opacity-50"
                 >
                   {loading ? 'Updating...' : 'Update Password →'}
                 </button>

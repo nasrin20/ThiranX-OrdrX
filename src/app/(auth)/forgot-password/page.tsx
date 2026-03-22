@@ -1,18 +1,16 @@
 'use client'
 
 // OrdrX — Forgot Password Page
+// Uses custom API route with Resend instead of Supabase SMTP
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 
 export default function ForgotPasswordPage() {
-  const supabase = createClient()
-
-  const [email,     setEmail]     = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [sent,      setSent]      = useState(false)
-  const [error,     setError]     = useState<string | null>(null)
+  const [email,   setEmail]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [sent,    setSent]    = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
 
   const handleSubmit = async () => {
     if (!email.trim()) {
@@ -23,20 +21,24 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     setError(null)
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      email.trim(),
-      {
-        redirectTo: `${window.location.origin}/reset-password`,
-      }
-    )
+    try {
+      const res = await fetch('/api/reset-password', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: email.trim() }),
+      })
 
-    if (resetError) {
-      setError(resetError.message)
-      setLoading(false)
-      return
+      const data = await res.json()
+
+      if (data.success) {
+        setSent(true)
+      } else {
+        setError('Something went wrong. Please try again.')
+      }
+    } catch {
+      setError('Something went wrong. Please try again.')
     }
 
-    setSent(true)
     setLoading(false)
   }
 
@@ -54,14 +56,11 @@ export default function ForgotPasswordPage() {
       flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
-        {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-[#1a1a2e] dark:text-white">
             ⚡ OrdrX
           </h1>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            by ThiranX
-          </p>
+          <p className="text-xs text-gray-400 mt-1">by ThiranX</p>
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-2xl border
@@ -78,8 +77,7 @@ export default function ForgotPasswordPage() {
 
               {error && (
                 <div className="bg-red-50 dark:bg-red-950 border border-red-200
-                  dark:border-red-800 text-red-600 dark:text-red-400
-                  text-sm rounded-xl px-4 py-3 mb-4">
+                  text-red-600 text-sm rounded-xl px-4 py-3 mb-4">
                   {error}
                 </div>
               )}
@@ -106,14 +104,13 @@ export default function ForgotPasswordPage() {
                   disabled={loading}
                   className="w-full py-3 rounded-xl bg-[#b5860d] hover:bg-[#9a7209]
                     text-white font-bold text-sm transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled:opacity-50"
                 >
                   {loading ? 'Sending...' : 'Send Reset Link →'}
                 </button>
               </div>
             </>
           ) : (
-            /* Success state */
             <div className="text-center py-4">
               <div className="text-4xl mb-4">📧</div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
@@ -125,13 +122,11 @@ export default function ForgotPasswordPage() {
               <p className="text-sm font-bold text-[#b5860d] mb-6">
                 {email}
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500">
-                Didn&apos;t receive it? Check your spam folder or{' '}
-                <button
-                  type="button"
+              <p className="text-xs text-gray-400">
+                Didn&apos;t receive it? Check spam or{' '}
+                <button type="button"
                   onClick={() => { setSent(false); setError(null) }}
-                  className="text-[#b5860d] font-semibold hover:underline"
-                >
+                  className="text-[#b5860d] font-semibold hover:underline">
                   try again
                 </button>
               </p>
@@ -139,8 +134,7 @@ export default function ForgotPasswordPage() {
           )}
         </div>
 
-        {/* Back to login */}
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
+        <p className="text-center text-sm text-gray-500 mt-6">
           Remember your password?{' '}
           <Link href="/login"
             className="text-[#b5860d] font-semibold hover:underline">
@@ -148,7 +142,7 @@ export default function ForgotPasswordPage() {
           </Link>
         </p>
 
-        <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-4">
+        <p className="text-center text-xs text-gray-400 mt-4">
           ⚡ OrdrX · Your orders. Sorted.
         </p>
       </div>
