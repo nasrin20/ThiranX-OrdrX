@@ -29,11 +29,11 @@ interface RazorpayOptions {
     ondismiss: () => void
   }
 }
-/*declare global {
+declare global {
   interface Window {
     Razorpay: new (options: RazorpayOptions) => { open: () => void }
   }
-}*/
+}
 
 // ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
@@ -527,8 +527,8 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         setError('Failed to load payment gateway. Please try again.')
         return
       }
-
-      const rzp = new window.Razorpay({
+      const Razorpay = (window as any).Razorpay
+      const rzp = new Razorpay({
         key:         orderData.key_id,
         amount:      orderData.amount,
         currency:    orderData.currency,
@@ -540,7 +540,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
           contact: form.customerPhone.trim(),
         },
         theme: { color },
-        handler: async (response) => {
+        handler: async (response: any) => {
           setLoading(true)
 
           // Step 3: Save order with payment details
