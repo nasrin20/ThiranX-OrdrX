@@ -173,7 +173,7 @@ export default function UpgradePage() {
     }
 
     // Open Razorpay checkout
-    const rzp = new window.Razorpay({
+    const rzp = new window.Razorpay({ 
       key:         orderData.key_id,
       amount:      orderData.amount,
       currency:    orderData.currency,

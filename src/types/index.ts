@@ -1,6 +1,5 @@
 // OrdrX -- Central Type Definitions
 
-// -- Business Types
 export type BusinessType =
   | 'perfume'
   | 'clothing'
@@ -12,14 +11,12 @@ export type BusinessType =
   | 'digital'
   | 'other'
 
-// -- Plan Types
 export type PlanType =
   | 'free'
   | 'starter'
   | 'growth'
   | 'pro'
 
-// -- Order Status
 export type OrderStatus =
   | 'pending'
   | 'paid'
@@ -27,14 +24,12 @@ export type OrderStatus =
   | 'cancelled'
   | 'overdue'
 
-// -- Preference Question
 export interface PrefQuestion {
   id:       string
   question: string
   options:  string[]
 }
 
-// -- Business
 export interface Business {
   id:             string
   user_id:        string
@@ -46,6 +41,7 @@ export interface Business {
   logo_url:       string | null
   whatsapp:       string | null
   email:          string | null
+  upi_id:         string | null
   bio:            string | null
   plan:           PlanType
   badges:         string[]
@@ -54,7 +50,6 @@ export interface Business {
   created_at:     string
 }
 
-// -- Product
 export interface Product {
   id:          string
   business_id: string
@@ -72,14 +67,12 @@ export interface Product {
   created_at:  string
 }
 
-// -- Cart Item
 export interface CartItem {
   product:  Product
   variant:  string
   quantity: number
 }
 
-// -- Customer
 export interface Customer {
   id:               string
   business_id:      string
@@ -91,7 +84,6 @@ export interface Customer {
   created_at:       string
 }
 
-// -- Order
 export interface Order {
   id:            string
   business_id:   string
@@ -108,7 +100,6 @@ export interface Order {
   created_at:    string
 }
 
-// -- Order Item
 export interface OrderItem {
   id:         string
   order_id:   string
@@ -119,7 +110,6 @@ export interface OrderItem {
   created_at: string
 }
 
-// -- Order with joined data
 export interface OrderWithDetails extends Order {
   customers?: { name: string; phone: string } | null
   products?:  { name: string } | null

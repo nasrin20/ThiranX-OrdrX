@@ -1,8 +1,7 @@
 // OrdrX — Secure Orders API Route
-// Saves order after payment verification
+// Saves order — payment handled via UPI directly
 
 import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendNewOrderEmail } from '@/lib/email'
 
@@ -19,16 +18,12 @@ interface CartItemRequest {
 }
 
 interface OrderRequest {
-  business_id:         string
-  customer_name:       string
-  customer_phone:      string
-  items:               CartItemRequest[]
-  total_amount:        number
-  notes:               string | null
-  // Razorpay payment fields
-  razorpay_order_id:   string | null
-  razorpay_payment_id: string | null
-  razorpay_signature:  string | null
+  business_id:    string
+  customer_name:  string
+  customer_phone: string
+  items:          CartItemRequest[]
+  total_amount:   number
+  notes:          string | null
 }
 
 const generateRef = (): string =>
@@ -45,9 +40,6 @@ export async function POST(req: NextRequest) {
       items,
       total_amount,
       notes,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
     } = body
 
     if (!business_id || !customer_name || !customer_phone || !items?.length) {
@@ -55,19 +47,6 @@ export async function POST(req: NextRequest) {
         { error: 'Missing required fields' },
         { status: 400 }
       )
-    }
-
-    // ── Verify Razorpay signature if payment provided ──────
-    let paymentVerified = false
-
-    if (razorpay_order_id && razorpay_payment_id && razorpay_signature) {
-      const body     = `${razorpay_order_id}|${razorpay_payment_id}`
-      const expected = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
-        .update(body)
-        .digest('hex')
-
-      paymentVerified = expected === razorpay_signature
     }
 
     // ── Get business ───────────────────────────────────────
@@ -137,9 +116,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Create order ───────────────────────────────────────
-    const ref        = generateRef()
-    const firstItem  = items[0]
-    const orderStatus = paymentVerified ? 'paid' : 'pending'
+    const ref       = generateRef()
+    const firstItem = items[0]
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -151,8 +129,7 @@ export async function POST(req: NextRequest) {
         variant:     firstItem.variant || null,
         quantity:    items.reduce((s, i) => s + i.quantity, 0),
         amount:      total_amount,
-        status:      orderStatus,
-        payment_id:  razorpay_payment_id || null,
+        status:      'pending',
         notes:       notes?.trim() || null,
       })
       .select()
@@ -212,10 +189,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      success:        true,
-      order_ref:      ref,
-      order_id:       order.id,
-      payment_status: orderStatus,
+      success:   true,
+      order_ref: ref,
+      order_id:  order.id,
     })
 
   } catch (err) {

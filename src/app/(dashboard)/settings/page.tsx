@@ -1,7 +1,7 @@
 'use client'
 
 // OrdrX — Settings Page
-// Edit profile + logo + badges + theme + preference questions
+// Edit profile + logo + badges + theme + UPI ID + preference questions
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -25,7 +25,6 @@ const inputCls = [
 const labelCls =
   'block text-xs font-semibold uppercase tracking-wide mb-1.5 text-gray-500 dark:text-gray-400'
 
-// ── Theme colors ───────────────────────────────────────────
 const THEME_COLORS = [
   { name: 'Gold',    value: '#b5860d' },
   { name: 'Purple',  value: '#7c4dca' },
@@ -55,7 +54,6 @@ const BADGE_SUGGESTIONS = [
   '♻️ Eco Friendly', '🌸 Natural', '💯 Authentic',
 ]
 
-// ── Section ────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl border
@@ -66,13 +64,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-// ── Question Editor ────────────────────────────────────────
 function QuestionEditor({
-  question,
-  index,
-  onUpdate,
-  onDelete,
-  color,
+  question, index, onUpdate, onDelete, color,
 }: {
   question: PrefQuestion
   index:    number
@@ -90,12 +83,6 @@ function QuestionEditor({
     setOptionInput('')
   }
 
-  const removeOption = (opt: string) =>
-    onUpdate({ ...question, options: question.options.filter((o) => o !== opt) })
-
-  const updateQuestion = (text: string) =>
-    onUpdate({ ...question, question: text })
-
   return (
     <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -103,48 +90,33 @@ function QuestionEditor({
           Question {index + 1}
         </span>
         <button type="button" onClick={onDelete}
-          className="text-xs text-red-400 hover:text-red-500">
-          Remove
-        </button>
+          className="text-xs text-red-400 hover:text-red-500">Remove</button>
       </div>
-
-      {/* Question text */}
-      <input
-        type="text"
-        value={question.question}
-        onChange={(e) => updateQuestion(e.target.value)}
+      <input type="text" value={question.question}
+        onChange={(e) => onUpdate({ ...question, question: e.target.value })}
         placeholder="e.g. What scent do you prefer?"
-        className={inputCls}
-      />
-
-      {/* Options */}
+        className={inputCls} />
       <div>
-        <p className="text-xs text-gray-400 mb-2">
-          Options ({question.options.length}/6):
-        </p>
+        <p className="text-xs text-gray-400 mb-2">Options ({question.options.length}/6):</p>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {question.options.map((opt) => (
-            <span key={opt}
-              className="flex items-center gap-1 text-xs font-semibold
-                px-2.5 py-1 rounded-full"
+            <span key={opt} className="flex items-center gap-1 text-xs font-semibold
+              px-2.5 py-1 rounded-full"
               style={{ background: `${color}20`, color }}>
               {opt}
-              <button type="button" onClick={() => removeOption(opt)}
+              <button type="button"
+                onClick={() => onUpdate({ ...question, options: question.options.filter((o) => o !== opt) })}
                 className="hover:text-red-500">×</button>
             </span>
           ))}
         </div>
-
         {question.options.length < 6 && (
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={optionInput}
+            <input type="text" value={optionInput}
               onChange={(e) => setOptionInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addOption()}
               placeholder="Add option..."
-              className={cn(inputCls, 'flex-1 text-xs py-2')}
-            />
+              className={cn(inputCls, 'flex-1 text-xs py-2')} />
             <Button variant="secondary" size="sm" type="button" onClick={addOption}>
               Add
             </Button>
@@ -155,7 +127,6 @@ function QuestionEditor({
   )
 }
 
-// ── Page ───────────────────────────────────────────────────
 export default function SettingsPage() {
   const supabase = createClient()
   const router   = useRouter()
@@ -168,11 +139,11 @@ export default function SettingsPage() {
   const [saved,       setSaved]       = useState(false)
   const [error,       setError]       = useState<string | null>(null)
 
-  // ── Form state ─────────────────────────────────────────
   const [name,        setName]        = useState('')
   const [bio,         setBio]         = useState('')
   const [whatsapp,    setWhatsapp]    = useState('')
   const [email,       setEmail]       = useState('')
+  const [upiId,       setUpiId]       = useState('')
   const [type,        setType]        = useState<BusinessType>('perfume')
   const [logoUrl,     setLogoUrl]     = useState<string | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -182,7 +153,6 @@ export default function SettingsPage() {
   const [themeBg,     setThemeBg]     = useState('gradient')
   const [questions,   setQuestions]   = useState<PrefQuestion[]>([])
 
-  // ── Fetch ──────────────────────────────────────────────
   const fetchBusiness = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -197,23 +167,23 @@ export default function SettingsPage() {
     if (!biz) { router.push('/onboarding'); return }
 
     setBusiness(biz)
-    setName(biz.name          ?? '')
-    setBio(biz.bio            ?? '')
-    setWhatsapp(biz.whatsapp  ?? '')
-    setEmail(biz.email        ?? '')
-    setType(biz.type          ?? 'perfume')
-    setLogoUrl(biz.logo_url   ?? null)
+    setName(biz.name           ?? '')
+    setBio(biz.bio             ?? '')
+    setWhatsapp(biz.whatsapp   ?? '')
+    setEmail(biz.email         ?? '')
+    setUpiId(biz.upi_id        ?? '')
+    setType(biz.type           ?? 'perfume')
+    setLogoUrl(biz.logo_url    ?? null)
     setLogoPreview(biz.logo_url ?? null)
-    setBadges(biz.badges      ?? [])
+    setBadges(biz.badges       ?? [])
     setThemeColor(biz.theme_color ?? '#b5860d')
-    setThemeBg(biz.theme_bg   ?? 'gradient')
+    setThemeBg(biz.theme_bg    ?? 'gradient')
     setQuestions(biz.pref_questions ?? [])
     setLoading(false)
   }, [supabase, router])
 
   useEffect(() => { fetchBusiness() }, [fetchBusiness])
 
-  // ── Logo upload ────────────────────────────────────────
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -244,7 +214,6 @@ export default function SettingsPage() {
     setUploading(false)
   }
 
-  // ── Badge helpers ──────────────────────────────────────
   const toggleBadge = (badge: string) => {
     setBadges((prev) =>
       prev.includes(badge)
@@ -261,29 +230,13 @@ export default function SettingsPage() {
     setCustomBadge('')
   }
 
-  // ── Question helpers ───────────────────────────────────
   const addQuestion = () => {
     if (questions.length >= 5) return
     setQuestions((prev) => [...prev, {
-      id:       `q_${Date.now()}`,
-      question: '',
-      options:  [],
+      id: `q_${Date.now()}`, question: '', options: [],
     }])
   }
 
-  const updateQuestion = (index: number, q: PrefQuestion) => {
-    setQuestions((prev) => prev.map((item, i) => i === index ? q : item))
-  }
-
-  const deleteQuestion = (index: number) => {
-    setQuestions((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const loadDefaults = () => {
-    setQuestions(DEFAULT_QUESTIONS[type] ?? [])
-  }
-
-  // ── Save ───────────────────────────────────────────────
   const handleSave = async () => {
     if (!business) return
     if (!name.trim()) { setError('Business name is required.'); return }
@@ -299,6 +252,7 @@ export default function SettingsPage() {
         bio:            bio.trim()      || null,
         whatsapp:       whatsapp.trim() || null,
         email:          email.trim()    || null,
+        upi_id:         upiId.trim()    || null,
         type,
         logo_url:       logoUrl,
         badges,
@@ -326,7 +280,6 @@ export default function SettingsPage() {
     router.refresh()
   }
 
-  // ── Header preview ─────────────────────────────────────
   const getHeaderStyle = () => {
     if (themeBg === 'solid') return { background: themeColor }
     if (themeBg === 'dark')  return { background: '#1a1a2e' }
@@ -361,14 +314,12 @@ export default function SettingsPage() {
         )}
         {saved && (
           <div className="bg-green-50 border border-green-200 text-green-600
-            text-sm rounded-xl px-4 py-3 mb-4">
-            ✅ Settings saved!
-          </div>
+            text-sm rounded-xl px-4 py-3 mb-4">✅ Settings saved!</div>
         )}
 
         <div className="space-y-4">
 
-          {/* ── Store Info ── */}
+          {/* Store Info */}
           <Section title="🏪 Store Information">
             <div className="bg-[#fdf6ef] dark:bg-gray-800 rounded-xl px-4 py-3
               flex items-center justify-between gap-3">
@@ -381,9 +332,7 @@ export default function SettingsPage() {
               <Button variant="secondary" size="sm" type="button"
                 onClick={() => navigator.clipboard.writeText(
                   `${window.location.origin}/${business?.slug}`
-                )}>
-                Copy 📋
-              </Button>
+                )}>Copy 📋</Button>
             </div>
 
             {/* Logo */}
@@ -458,14 +407,13 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Theme ── */}
+          {/* Theme */}
           <Section title="🎨 Store Theme">
             <div>
               <label className={labelCls}>Preview</label>
               <div className="rounded-2xl overflow-hidden h-20 relative"
                 style={getHeaderStyle()}>
-                <div className="absolute inset-0 flex flex-col items-center
-                  justify-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <p className="text-sm font-bold text-white">{name || 'Your Store'}</p>
                   <p className="text-xs text-white/60">@{business?.slug}</p>
                 </div>
@@ -504,10 +452,8 @@ export default function SettingsPage() {
                       style={
                         bg.value === 'gradient'
                           ? { background: `linear-gradient(135deg, ${themeColor}ee, ${themeColor}77)` }
-                          : bg.value === 'solid'
-                          ? { background: themeColor }
-                          : bg.value === 'dark'
-                          ? { background: '#1a1a2e' }
+                          : bg.value === 'solid' ? { background: themeColor }
+                          : bg.value === 'dark'  ? { background: '#1a1a2e' }
                           : { background: `${themeColor}22` }
                       } />
                     <p className="text-xs font-semibold text-gray-500">{bg.name}</p>
@@ -517,10 +463,9 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Badges ── */}
+          {/* Badges */}
           <Section title="🏷️ Store Badges">
             <p className="text-xs text-gray-500 -mt-2">Up to 5 badges on your storefront</p>
-
             {badges.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {badges.map((b) => (
@@ -534,15 +479,12 @@ export default function SettingsPage() {
                 ))}
               </div>
             )}
-
             <div className="flex flex-wrap gap-2">
               {BADGE_SUGGESTIONS.map((b) => (
                 <button key={b} type="button" onClick={() => toggleBadge(b)}
                   className={cn(
                     'text-xs px-3 py-1.5 rounded-full border transition-colors',
-                    badges.includes(b)
-                      ? 'text-white border-transparent'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-500',
+                    badges.includes(b) ? 'text-white border-transparent' : 'border-gray-200 dark:border-gray-700 text-gray-500',
                     badges.length >= 5 && !badges.includes(b) && 'opacity-40 cursor-not-allowed',
                   )}
                   style={badges.includes(b) ? { background: themeColor } : {}}>
@@ -550,7 +492,6 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
-
             <div className="flex gap-2">
               <input type="text" value={customBadge}
                 onChange={(e) => setCustomBadge(e.target.value)}
@@ -565,62 +506,47 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Preference Questions ── */}
+          {/* Preference Questions */}
           <Section title="🧠 Preference Questions">
-            <div className="-mt-2">
-              <p className="text-xs text-gray-500 mb-3">
-                Help customers find the right product with a smart quiz.
-                If no questions added, the quiz button won&apos;t show on your store.
-              </p>
-
-              {/* Load defaults button */}
-              {questions.length === 0 && (
-                <button type="button" onClick={loadDefaults}
-                  className="w-full py-3 rounded-xl border-2 border-dashed
-                    border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
-                    text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]
-                    transition-colors mb-4">
-                  ✨ Load suggested questions for {BUSINESS_TYPE_CONFIG[type].label}
-                </button>
-              )}
-
-              {/* Questions list */}
-              <div className="space-y-3">
-                {questions.map((q, i) => (
-                  <QuestionEditor
-                    key={q.id}
-                    question={q}
-                    index={i}
-                    color={themeColor}
-                    onUpdate={(updated) => updateQuestion(i, updated)}
-                    onDelete={() => deleteQuestion(i)}
-                  />
-                ))}
-              </div>
-
-              {/* Add question button */}
-              {questions.length < 5 && (
-                <button type="button" onClick={addQuestion}
-                  className="w-full mt-3 py-3 rounded-xl border-2 border-dashed
-                    border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
-                    text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]
-                    transition-colors">
-                  + Add Question ({questions.length}/5)
-                </button>
-              )}
-
-              {questions.length > 0 && (
-                <button type="button"
-                  onClick={() => setQuestions([])}
-                  className="text-xs text-red-400 hover:text-red-500 mt-2">
-                  Clear all questions
-                </button>
-              )}
+            <p className="text-xs text-gray-500 -mt-2">
+              Help customers find the right product.
+              No questions = no quiz button on storefront.
+            </p>
+            {questions.length === 0 && (
+              <button type="button"
+                onClick={() => setQuestions(DEFAULT_QUESTIONS[type] ?? [])}
+                className="w-full py-3 rounded-xl border-2 border-dashed
+                  border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
+                  text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]
+                  transition-colors mb-2">
+                ✨ Load suggested questions for {BUSINESS_TYPE_CONFIG[type].label}
+              </button>
+            )}
+            <div className="space-y-3">
+              {questions.map((q, i) => (
+                <QuestionEditor key={q.id} question={q} index={i} color={themeColor}
+                  onUpdate={(updated) => setQuestions((prev) => prev.map((item, idx) => idx === i ? updated : item))}
+                  onDelete={() => setQuestions((prev) => prev.filter((_, idx) => idx !== i))} />
+              ))}
             </div>
+            {questions.length < 5 && (
+              <button type="button" onClick={addQuestion}
+                className="w-full mt-2 py-3 rounded-xl border-2 border-dashed
+                  border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
+                  text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d] transition-colors">
+                + Add Question ({questions.length}/5)
+              </button>
+            )}
+            {questions.length > 0 && (
+              <button type="button" onClick={() => setQuestions([])}
+                className="text-xs text-red-400 hover:text-red-500">
+                Clear all questions
+              </button>
+            )}
           </Section>
 
-          {/* ── Contact ── */}
-          <Section title="📱 Contact Details">
+          {/* Contact + Payment */}
+          <Section title="📱 Contact & Payment">
             <div>
               <label className={labelCls}>WhatsApp Number</label>
               <input type="tel" value={whatsapp}
@@ -628,6 +554,19 @@ export default function SettingsPage() {
                 placeholder="+91 98765 43210" className={inputCls} />
               <p className="text-xs text-gray-400 mt-1">Include country code</p>
             </div>
+
+            {/* UPI ID */}
+            <div>
+              <label className={labelCls}>UPI ID</label>
+              <input type="text" value={upiId}
+                onChange={(e) => setUpiId(e.target.value)}
+                placeholder="yourname@paytm or 9876543210@ybl"
+                className={inputCls} />
+              <p className="text-xs text-gray-400 mt-1">
+                Customers will pay you directly on this UPI ID after ordering
+              </p>
+            </div>
+
             <div>
               <label className={labelCls}>Email (optional)</label>
               <input type="email" value={email}
@@ -636,7 +575,7 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Store link ── */}
+          {/* Store link */}
           <Section title="🔗 Your Store Link">
             <div className="text-center py-2">
               <p className="text-2xl font-bold mb-2" style={{ color: themeColor }}>
@@ -646,26 +585,20 @@ export default function SettingsPage() {
                 <Button variant="primary" size="lg" type="button" className="flex-1"
                   onClick={() => navigator.clipboard.writeText(
                     `${window.location.origin}/${business?.slug}`
-                  )}>
-                  Copy Link 📋
-                </Button>
+                  )}>Copy Link 📋</Button>
                 <Button variant="secondary" size="lg" type="button" className="flex-1"
                   onClick={() => window.open(
                     `${window.location.origin}/${business?.slug}`, '_blank'
-                  )}>
-                  Preview 👁️
-                </Button>
+                  )}>Preview 👁️</Button>
               </div>
             </div>
           </Section>
 
-          {/* Save */}
           <Button variant="primary" size="lg" type="button"
             onClick={handleSave} loading={saving || uploading} className="w-full">
             💾 Save Changes
           </Button>
 
-          {/* Account */}
           <Section title="⚠️ Account">
             <div className="flex items-center justify-between">
               <div>

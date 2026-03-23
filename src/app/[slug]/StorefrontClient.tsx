@@ -1,45 +1,15 @@
 'use client'
 
-// OrdrX — Storefront Client with Razorpay Payment
+// OrdrX — Storefront Client with UPI Payment Flow
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Business, Product, BusinessType, CartItem, PrefQuestion } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
 import { matchProducts, PrefAnswer } from '@/constants/preferences'
 
-// ── Razorpay types ─────────────────────────────────────────
-interface RazorpayOptions {
-  key:         string
-  amount:      number
-  currency:    string
-  name:        string
-  description: string
-  order_id:    string
-  prefill: {
-    name:    string
-    contact: string
-  }
-  theme:   { color: string }
-  handler: (response: {
-    razorpay_order_id:   string
-    razorpay_payment_id: string
-    razorpay_signature:  string
-  }) => void
-  modal: {
-    ondismiss: () => void
-  }
-}
-declare global {
-  interface Window {
-    Razorpay: {
-      new (options: RazorpayOptions): { open: () => void }
-    }
-  }
-}
-
 // ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
-  business: Business
+  business: Business & { upi_id?: string | null }
   products: Product[]
 }
 
@@ -49,7 +19,7 @@ interface OrderForm {
   note:          string
 }
 
-type Screen = 'shop' | 'quiz' | 'detail' | 'checkout' | 'confirmed'
+type Screen = 'shop' | 'quiz' | 'detail' | 'checkout' | 'payment' | 'confirmed'
 
 // ── Helpers ────────────────────────────────────────────────
 const formatPrice = (paise: number): string =>
@@ -70,17 +40,13 @@ const getHeaderStyle = (color: string, bg: string): React.CSSProperties => {
 const getTextColor = (bg: string, color: string): string =>
   bg === 'soft' ? color : '#ffffff'
 
-// ── Load Razorpay script ───────────────────────────────────
-const loadRazorpay = (): Promise<boolean> => {
-  return new Promise((resolve) => {
-    if (window.Razorpay) { resolve(true); return }
-    const script    = document.createElement('script')
-    script.src      = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload   = () => resolve(true)
-    script.onerror  = () => resolve(false)
-    document.body.appendChild(script)
-  })
-}
+// ── UPI Apps ───────────────────────────────────────────────
+const UPI_APPS = [
+  { name: 'PhonePe',  icon: '💜', color: '#5f259f', scheme: 'phonepe'  },
+  { name: 'GPay',     icon: '🔵', color: '#4285f4', scheme: 'gpay'     },
+  { name: 'Paytm',    icon: '🔷', color: '#00b9f1', scheme: 'paytm'    },
+  { name: 'BHIM',     icon: '🇮🇳', color: '#ff6b00', scheme: 'upi'      },
+]
 
 // ── Product Thumbnail ──────────────────────────────────────
 function ProductThumbnail({
@@ -197,9 +163,7 @@ function ProductCard({
           <button type="button"
             onClick={() => product.variants.length > 0 ? onSelect(product) : onAddToCart(product)}
             className="w-full py-2 rounded-xl text-white text-xs font-bold"
-            style={{ background: color }}>
-            + Add to Cart
-          </button>
+            style={{ background: color }}>+ Add to Cart</button>
         ) : (
           <div className="flex items-center justify-between gap-2">
             <button type="button" onClick={() => onUpdateQty(product.id, -1)}
@@ -334,14 +298,12 @@ function PreferenceQuiz({
         {!isFirstQ && (
           <button type="button" onClick={() => setCurrentQ((q) => q - 1)}
             className="flex-1 py-3 rounded-2xl border-2 text-sm font-bold
-              text-gray-500 border-gray-200 dark:border-gray-700">
-            ← Back
-          </button>
+              text-gray-500 border-gray-200 dark:border-gray-700">← Back</button>
         )}
         <button type="button" onClick={handleNext}
           disabled={selected.length === 0}
           className="flex-1 py-3 rounded-2xl text-white text-sm font-bold
-            transition-all disabled:opacity-40"
+            disabled:opacity-40"
           style={{ background: color }}>
           {isLastQ ? '✨ Show my matches!' : 'Next →'}
         </button>
@@ -357,14 +319,15 @@ function PreferenceQuiz({
 
 // ── Main Component ─────────────────────────────────────────
 export function StorefrontClient({ business, products }: StorefrontClientProps) {
-  const config = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
-  const color  = business.theme_color || config.color
-  const bg     = (business as Business & { theme_bg?: string }).theme_bg || 'gradient'
+  const config  = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
+  const color   = business.theme_color || config.color
+  const bg      = (business as Business & { theme_bg?: string }).theme_bg || 'gradient'
+  const upiId   = business.upi_id ?? null
+  const hasQuiz = (business.pref_questions ?? []).length > 0
 
   const headerStyle = getHeaderStyle(color, bg)
   const textColor   = getTextColor(bg, color)
   const isLight     = bg === 'soft'
-  const hasQuiz     = (business.pref_questions ?? []).length > 0
 
   const [screen,        setScreen]        = useState<Screen>('shop')
   const [selected,      setSelected]      = useState<Product | null>(null)
@@ -376,7 +339,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const [quizDone,      setQuizDone]      = useState(false)
   const [detailVariant, setDetailVariant] = useState('')
   const [detailQty,     setDetailQty]     = useState(1)
-  const [paymentDone,   setPaymentDone]   = useState(false)
+  const [copied,        setCopied]        = useState(false)
 
   const [form, setForm] = useState<OrderForm>({
     customerName: '', customerPhone: '', note: '',
@@ -384,9 +347,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
   const updateForm = (field: keyof OrderForm, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }))
-
-  // ── Preload Razorpay ──────────────────────────────────────
-  useEffect(() => { loadRazorpay() }, [])
 
   // ── Filtered products ─────────────────────────────────────
   const displayProducts = useMemo(() => {
@@ -450,39 +410,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setScreen('shop')
   }
 
-  // ── Save order to database ─────────────────────────────────
-  const saveOrder = async (
-    paymentData: {
-      razorpay_order_id:   string
-      razorpay_payment_id: string
-      razorpay_signature:  string
-    } | null
-  ) => {
-    const response = await fetch('/api/orders', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        business_id:    business.id,
-        customer_name:  form.customerName.trim(),
-        customer_phone: form.customerPhone.trim(),
-        items: cart.map((i) => ({
-          product_id: i.product.id,
-          variant:    i.variant || null,
-          quantity:   i.quantity,
-          price:      i.product.price,
-        })),
-        total_amount:        totalAmount,
-        notes:               form.note.trim() || null,
-        razorpay_order_id:   paymentData?.razorpay_order_id   ?? null,
-        razorpay_payment_id: paymentData?.razorpay_payment_id ?? null,
-        razorpay_signature:  paymentData?.razorpay_signature  ?? null,
-      }),
-    })
-
-    return response.json()
-  }
-
-  // ── Place order with Razorpay ─────────────────────────────
+  // ── Place order ───────────────────────────────────────────
   const placeOrder = async () => {
     if (!form.customerName.trim() || !form.customerPhone.trim()) {
       setError('Please fill in your name and WhatsApp number.')
@@ -494,13 +422,12 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setError(null)
 
     try {
-      // Step 1: Create Razorpay order
-      const orderRes = await fetch('/api/storefront-order', {
+      const response = await fetch('/api/orders', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          business_id:   business.id,
-          customer_name: form.customerName.trim(),
+          business_id:    business.id,
+          customer_name:  form.customerName.trim(),
           customer_phone: form.customerPhone.trim(),
           items: cart.map((i) => ({
             product_id: i.product.id,
@@ -513,69 +440,67 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         }),
       })
 
-      const orderData = await orderRes.json()
+      const data = await response.json()
 
-      if (!orderData.success) {
-        setError(orderData.error ?? 'Failed to initiate payment.')
+      if (!response.ok || !data.success) {
+        setError(data.error ?? 'Failed to place order.')
         setLoading(false)
         return
       }
 
-      setLoading(false)
+      setOrderRef(data.order_ref)
 
-      // Step 2: Open Razorpay checkout
-      const loaded = await loadRazorpay()
-      if (!loaded) {
-        setError('Failed to load payment gateway. Please try again.')
-        return
+      // If UPI ID exists → go to payment screen
+      // Otherwise → go directly to confirmed
+      if (upiId) {
+        setScreen('payment')
+      } else {
+        setScreen('confirmed')
       }
-      const Razorpay = (window as any).Razorpay
-      const rzp = new Razorpay({
-        key:         orderData.key_id,
-        amount:      orderData.amount,
-        currency:    orderData.currency,
-        name:        business.name,
-        description: `Order from ${business.name}`,
-        order_id:    orderData.razorpay_order_id,
-        prefill: {
-          name:    form.customerName.trim(),
-          contact: form.customerPhone.trim(),
-        },
-        theme: { color },
-        handler: async (response: any) => {
-          setLoading(true)
-
-          // Step 3: Save order with payment details
-          const saveData = await saveOrder({
-            razorpay_order_id:   response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature:  response.razorpay_signature,
-          })
-
-          if (saveData.success) {
-            setOrderRef(saveData.order_ref)
-            setPaymentDone(true)
-            setScreen('confirmed')
-          } else {
-            setError(saveData.error ?? 'Order failed after payment. Contact support.')
-          }
-
-          setLoading(false)
-        },
-        modal: {
-          ondismiss: () => {
-            setError('Payment cancelled. Please try again.')
-            setLoading(false)
-          },
-        },
-      })
-
-      rzp.open()
 
     } catch {
       setError('Something went wrong. Please try again.')
-      setLoading(false)
     }
+
+    setLoading(false)
+  }
+
+  // ── Copy UPI ID ───────────────────────────────────────────
+  const copyUpiId = () => {
+    if (upiId) {
+      navigator.clipboard.writeText(upiId)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  // ── Open UPI app ──────────────────────────────────────────
+  const openUpiApp = (scheme: string) => {
+    const amount   = (totalAmount / 100).toFixed(2)
+    const note     = `OrdrX Order ${orderRef}`
+    const payeeVpa = upiId ?? ''
+
+    let url = ''
+    if (scheme === 'phonepe') {
+      url = `phonepe://pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}`
+    } else if (scheme === 'gpay') {
+      url = `tez://upi/pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}`
+    } else if (scheme === 'paytm') {
+      url = `paytmmp://pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}`
+    } else {
+      url = `upi://pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}&cu=INR`
+    }
+
+    window.location.href = url
+  }
+
+  // ── WhatsApp message after payment ────────────────────────
+  const whatsappAfterPayment = () => {
+    if (!business.whatsapp) return
+    const msg = encodeURIComponent(
+      `Hi ${business.name}! 👋\n\nI just paid ₹${(totalAmount / 100).toLocaleString('en-IN')} for order *${orderRef}* via UPI.\n\nPlease confirm my order. Thank you! 🙏`
+    )
+    window.open(`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=${msg}`, '_blank')
   }
 
   const inputCls = [
@@ -805,20 +730,18 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                   Your Order
                 </h2>
-                <p className="text-sm text-gray-500 mt-0.5">Review and pay</p>
+                <p className="text-sm text-gray-500 mt-0.5">Review and confirm</p>
               </div>
               <button type="button" onClick={() => setScreen('shop')}
                 className="text-sm font-bold px-3 py-1.5 rounded-xl border-2"
                 style={{ borderColor: color, color }}>✏️ Edit</button>
             </div>
 
-            {/* Cart items */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl border
               border-gray-100 dark:border-gray-800 p-4 mb-4">
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
-                  className="flex items-center gap-3 py-2 border-b
-                    border-gray-100 last:border-0">
+                  className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
                   <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
                     <ProductThumbnail photoUrl={item.product.photo_url ?? null}
                       emoji={item.product.emoji} name={item.product.name} color={color} />
@@ -877,25 +800,115 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 rows={2} className={inputCls + ' resize-none'} />
             </div>
 
-            {/* Pay button */}
             <button type="button" onClick={placeOrder} disabled={loading}
               className="w-full py-4 rounded-2xl text-white text-base font-bold
-                transition-all disabled:opacity-50 active:scale-[0.98]
-                flex items-center justify-center gap-2"
+                transition-all disabled:opacity-50 active:scale-[0.98]"
               style={{ background: color }}>
-              {loading ? (
-                'Processing...'
-              ) : (
-                <>
-                  <span>Pay {formatPrice(totalAmount)}</span>
-                  <span className="text-xs opacity-70">via Razorpay</span>
-                </>
-              )}
+              {loading ? 'Placing order...' : `Place Order — ${formatPrice(totalAmount)}`}
             </button>
 
             <p className="text-center text-xs text-gray-400 mt-3">
-              🔒 Secure payment via Razorpay · UPI, Cards, Netbanking
+              {upiId
+                ? '💳 You will be shown UPI payment details next'
+                : '💬 Seller will contact you on WhatsApp to collect payment'}
             </p>
+          </div>
+        )}
+
+        {/* ── PAYMENT SCREEN ── */}
+        {screen === 'payment' && upiId && (
+          <div>
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">💳</div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                Complete Payment
+              </h2>
+              <p className="text-sm text-gray-500">
+                Pay {formatPrice(totalAmount)} to confirm your order
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Order Ref: {orderRef}</p>
+            </div>
+
+            {/* UPI ID display */}
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border
+              border-gray-100 dark:border-gray-800 p-5 mb-6">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
+                Pay to UPI ID
+              </p>
+
+              <div className="flex items-center justify-between gap-3 bg-gray-50
+                dark:bg-gray-800 rounded-xl px-4 py-3 mb-4">
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">UPI ID</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">
+                    {upiId}
+                  </p>
+                </div>
+                <button type="button" onClick={copyUpiId}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold
+                    transition-colors flex-shrink-0"
+                  style={{
+                    background: copied ? '#22c55e' : `${color}20`,
+                    color:       copied ? '#fff' : color,
+                  }}>
+                  {copied ? '✅ Copied!' : '📋 Copy'}
+                </button>
+              </div>
+
+              <div className="text-center">
+                <p className="text-2xl font-black mb-1" style={{ color }}>
+                  {formatPrice(totalAmount)}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Add note: <span className="font-semibold">{orderRef}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* UPI App buttons */}
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
+              Open UPI App
+            </p>
+            <div className="grid grid-cols-4 gap-3 mb-6">
+              {UPI_APPS.map((app) => (
+                <button key={app.name} type="button"
+                  onClick={() => openUpiApp(app.scheme)}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-2xl
+                    border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900
+                    hover:border-gray-300 transition-colors">
+                  <span className="text-2xl">{app.icon}</span>
+                  <span className="text-xs font-semibold text-gray-500">{app.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* After payment */}
+            <div className="bg-green-50 dark:bg-green-950 border border-green-200
+              dark:border-green-800 rounded-2xl p-4 mb-4">
+              <p className="text-sm font-bold text-green-700 dark:text-green-400 mb-1">
+                ✅ After paying — let the seller know!
+              </p>
+              <p className="text-xs text-green-600 dark:text-green-500">
+                Send a WhatsApp message with your payment screenshot
+                so {business.name} can confirm your order.
+              </p>
+            </div>
+
+            {/* WhatsApp button */}
+            {business.whatsapp && (
+              <button type="button" onClick={whatsappAfterPayment}
+                className="w-full flex items-center justify-center gap-2 mb-3
+                  bg-[#25D366] text-white rounded-2xl py-4 font-bold text-sm">
+                💬 I&apos;ve paid — Message {business.name}
+              </button>
+            )}
+
+            {/* Confirm without WhatsApp */}
+            <button type="button" onClick={() => setScreen('confirmed')}
+              className="w-full py-3 rounded-2xl border-2 text-sm font-bold
+                transition-colors text-gray-500 border-gray-200 dark:border-gray-700">
+              I&apos;ve paid ✅ — Confirm order
+            </button>
           </div>
         )}
 
@@ -903,26 +916,23 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {screen === 'confirmed' && (
           <div className="text-center">
             <div className="w-20 h-20 rounded-full flex items-center justify-center
-              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>
-              {paymentDone ? '✅' : '🎉'}
-            </div>
+              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>✅</div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Order Confirmed! 🎉
+              Order Placed! 🎉
             </h2>
-            <p className="text-sm text-gray-500 mb-2">
-              {paymentDone
-                ? '✅ Payment successful!'
-                : `${business.name} will contact you on WhatsApp.`}
-            </p>
             <p className="text-sm text-gray-500 mb-6">
-              {business.name} will process your order soon.
+              {upiId
+                ? `${business.name} will confirm your order after receiving payment.`
+                : `${business.name} will contact you on WhatsApp to collect payment.`}
             </p>
 
             <div className="bg-white dark:bg-gray-900 rounded-2xl border
               border-gray-100 dark:border-gray-800 p-4 text-left mb-4">
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-xs text-gray-400">Order Ref</span>
-                <span className="text-xs font-bold text-gray-900">{orderRef}</span>
+                <span className="text-xs font-bold text-gray-900 dark:text-white">
+                  {orderRef}
+                </span>
               </div>
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
@@ -930,13 +940,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                   <span className="text-xs text-gray-400 truncate flex-1 mr-2">
                     {item.product.name}{item.variant ? ` · ${item.variant}` : ''} × {item.quantity}
                   </span>
-                  <span className="text-xs font-bold text-gray-900 flex-shrink-0">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white flex-shrink-0">
                     {formatPrice(item.product.price * item.quantity)}
                   </span>
                 </div>
               ))}
               <div className="flex justify-between pt-3">
-                <span className="text-xs font-bold text-gray-500">Total Paid</span>
+                <span className="text-xs font-bold text-gray-500">Total</span>
                 <span className="text-sm font-bold" style={{ color }}>
                   {formatPrice(totalAmount)}
                 </span>
@@ -944,7 +954,7 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
             </div>
 
             {business.whatsapp && (
-              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=Hi! I just paid and placed order ${orderRef} on OrdrX. Total: ${formatPrice(totalAmount)}`}
+              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=Hi ${business.name}! I placed order ${orderRef} for ${formatPrice(totalAmount)} on OrdrX.`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2
                   bg-[#25D366] text-white rounded-2xl py-3 font-bold text-sm mb-3">
@@ -956,7 +966,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               onClick={() => {
                 setScreen('shop')
                 setCart([])
-                setPaymentDone(false)
                 setForm({ customerName: '', customerPhone: '', note: '' })
               }}
               className="text-sm font-semibold" style={{ color }}>
