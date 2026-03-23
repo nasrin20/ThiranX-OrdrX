@@ -29,18 +29,9 @@ interface RazorpayOptions {
     ondismiss: () => void
   }
 }
-/*added this to global.d.ts for Razorpay types, but keeping here for reference */
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => { open: () => void }
-  }
-}
 /*declare global {
   interface Window {
-    Razorpay: new (options: any) => { open: () => void }
-    //  Razorpay: {
-    //   new (options: RazorpayOptions): { open: () => void }
-    // }
+    Razorpay: new (options: RazorpayOptions) => { open: () => void }
   }
 }*/
 
