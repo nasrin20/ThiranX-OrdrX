@@ -43,10 +43,13 @@ export interface Business {
   email:          string | null
   upi_id:         string | null
   bio:            string | null
+  about_us:       string | null
+  address:        string | null
   plan:           PlanType
   badges:         string[]
   active:         boolean
   pref_questions: PrefQuestion[]
+  banner_images:  string[]
   created_at:     string
 }
 
@@ -63,6 +66,7 @@ export interface Product {
   variants:    string[]
   active:      boolean
   photo_url:   string | null
+  photo_url_2: string | null
   pref_tags:   string[]
   created_at:  string
 }

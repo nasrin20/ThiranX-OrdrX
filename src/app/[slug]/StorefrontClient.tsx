@@ -1,15 +1,20 @@
 'use client'
 
-// OrdrX — Storefront Client with UPI Payment Flow
+// OrdrX — Luxury Minimal Storefront
+// KOOKAÏ/Zara inspired — clean, editorial, premium
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Business, Product, BusinessType, CartItem, PrefQuestion } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
 import { matchProducts, PrefAnswer } from '@/constants/preferences'
 
-// ── Types ──────────────────────────────────────────────────
 interface StorefrontClientProps {
-  business: Business & { upi_id?: string | null }
+  business: Business & {
+    upi_id?:        string | null
+    about_us?:      string | null
+    address?:       string | null
+    banner_images?: string[]
+  }
   products: Product[]
 }
 
@@ -22,64 +27,170 @@ interface OrderForm {
 type Screen = 'shop' | 'quiz' | 'detail' | 'checkout' | 'payment' | 'confirmed'
 
 // ── Helpers ────────────────────────────────────────────────
-const formatPrice = (paise: number): string =>
+const fmt = (paise: number): string =>
   `₹${(paise / 100).toLocaleString('en-IN')}`
 
-const getDiscount = (price: number, mrp: number | null): number | null => {
-  if (!mrp || mrp <= 0 || mrp <= price) return null
+const discount = (price: number, mrp: number | null): number | null => {
+  if (!mrp || mrp <= price) return null
   return Math.round((1 - price / mrp) * 100)
 }
 
-const getHeaderStyle = (color: string, bg: string): React.CSSProperties => {
-  if (bg === 'solid') return { background: color }
-  if (bg === 'dark')  return { background: '#1a1a2e' }
-  if (bg === 'soft')  return { background: `${color}22` }
-  return { background: `linear-gradient(160deg, ${color}ee, ${color}99)` }
-}
-
-const getTextColor = (bg: string, color: string): string =>
-  bg === 'soft' ? color : '#ffffff'
-
-// ── UPI Apps ───────────────────────────────────────────────
 const UPI_APPS = [
-  { name: 'PhonePe',  icon: '💜', color: '#5f259f', scheme: 'phonepe'  },
-  { name: 'GPay',     icon: '🔵', color: '#4285f4', scheme: 'gpay'     },
-  { name: 'Paytm',    icon: '🔷', color: '#00b9f1', scheme: 'paytm'    },
-  { name: 'BHIM',     icon: '🇮🇳', color: '#ff6b00', scheme: 'upi'      },
+  { name: 'PhonePe', icon: '💜', scheme: 'phonepe' },
+  { name: 'GPay',    icon: '🔵', scheme: 'gpay'    },
+  { name: 'Paytm',   icon: '🔷', scheme: 'paytm'   },
+  { name: 'BHIM',    icon: '🇮🇳', scheme: 'upi'     },
 ]
 
-// ── Product Thumbnail ──────────────────────────────────────
-function ProductThumbnail({
-  photoUrl, emoji, name, color,
-}: {
-  photoUrl: string | null; emoji: string; name: string; color: string
-}) {
-  if (photoUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
-    )
+// ── Banner Slider ──────────────────────────────────────────
+function BannerSlider({ images, color }: { images: string[]; color: string }) {
+  const [current, setCurrent] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startTimer = useCallback(() => {
+    if (images.length <= 1) return
+    timerRef.current = setInterval(() => {
+      setCurrent((c) => (c + 1) % images.length)
+    }, 5000)
+  }, [images.length])
+
+  useEffect(() => {
+    startTimer()
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [startTimer])
+
+  const goTo = (i: number) => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setCurrent(i)
+    startTimer()
   }
+
+  if (images.length === 0) return null
+
   return (
-    <div className="w-full h-full flex items-center justify-center"
-      style={{ background: `${color}15` }}>
-      <span className="text-4xl">{emoji}</span>
+    <div className="relative w-full overflow-hidden"
+      style={{ height: '50vh', minHeight: '240px', maxHeight: '420px' }}>
+
+      {images.map((url, i) => (
+        <div key={url}
+          className="absolute inset-0 transition-opacity duration-1000"
+          style={{ opacity: i === current ? 1 : 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={`Banner ${i + 1}`}
+            className="w-full h-full object-contain"
+            style={{ background: '#f8f8f6' }} />
+        </div>
+      ))}
+
+      {/* Dots */}
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
+          {images.map((_, i) => (
+            <button key={i} type="button" onClick={() => goTo(i)}
+              className="transition-all duration-300"
+              style={{
+                width:      i === current ? '24px' : '6px',
+                height:     '6px',
+                borderRadius: '3px',
+                background: i === current ? color : `${color}60`,
+              }} />
+          ))}
+        </div>
+      )}
+
+      {/* Arrows */}
+      {images.length > 1 && (
+        <>
+          <button type="button"
+            onClick={() => goTo((current - 1 + images.length) % images.length)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-10
+              w-9 h-9 bg-white/80 backdrop-blur-sm rounded-full
+              flex items-center justify-center shadow-sm
+              hover:bg-white transition-colors text-gray-700 text-sm font-bold">
+            ‹
+          </button>
+          <button type="button"
+            onClick={() => goTo((current + 1) % images.length)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-10
+              w-9 h-9 bg-white/80 backdrop-blur-sm rounded-full
+              flex items-center justify-center shadow-sm
+              hover:bg-white transition-colors text-gray-700 text-sm font-bold">
+            ›
+          </button>
+        </>
+      )}
     </div>
   )
 }
 
-// ── Store Avatar ───────────────────────────────────────────
-function StoreAvatar({ logoUrl, name, emoji }: {
-  logoUrl: string | null; name: string; emoji: string
+// ── Product Image ──────────────────────────────────────────
+function ProductImage({
+  photoUrl, photoUrl2, emoji, name, color,
+}: {
+  photoUrl:  string | null
+  photoUrl2: string | null
+  emoji:     string
+  name:      string
+  color:     string
 }) {
+  const [idx, setIdx] = useState(0)
+  const images = [photoUrl, photoUrl2].filter(Boolean) as string[]
+
+  if (images.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center"
+        style={{ background: `${color}08` }}>
+        <span className="text-5xl opacity-60">{emoji}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative w-full h-full group">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={images[idx]} alt={name}
+        className="w-full h-full object-contain transition-opacity duration-300"
+        style={{ background: '#f8f8f6' }} />
+      {images.length > 1 && (
+        <>
+          {/* Hover to show second image */}
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100
+            transition-opacity duration-500">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={images[1]} alt={name}
+              className="w-full h-full object-contain"
+              style={{ background: '#f8f8f6' }} />
+          </div>
+          {/* Dots */}
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
+            {images.map((_, i) => (
+              <button key={i} type="button"
+                onClick={(e) => { e.stopPropagation(); setIdx(i) }}
+                className="w-1.5 h-1.5 rounded-full transition-all"
+                style={{ background: i === idx ? color : '#00000030' }} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Store Logo ─────────────────────────────────────────────
+function StoreLogo({ logoUrl, name, emoji, size = 'md' }: {
+  logoUrl: string | null; name: string; emoji: string; size?: 'sm' | 'md'
+}) {
+  const cls = size === 'sm' ? 'w-7 h-7 text-lg' : 'w-10 h-10 text-xl'
   if (logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={logoUrl} alt={name} className="w-full h-full object-cover" />
+      <img src={logoUrl} alt={name}
+        className={`${cls} rounded-full object-contain border border-black/10`} />
     )
   }
   return (
-    <div className="w-full h-full flex items-center justify-center text-3xl">
+    <div className={`${cls} rounded-full flex items-center justify-center
+      bg-black/5`}>
       {emoji}
     </div>
   )
@@ -96,117 +207,140 @@ function ProductCard({
   recommended?: boolean
   onSelect:     (p: Product) => void
   onAddToCart:  (p: Product) => void
-  onUpdateQty:  (productId: string, delta: number) => void
+  onUpdateQty:  (id: string, delta: number) => void
 }) {
-  const discount = getDiscount(product.price, product.mrp ?? null)
-  const inCart   = !!cartItem
-  const cartQty  = cartItem?.quantity ?? 0
+  const disc   = discount(product.price, product.mrp ?? null)
+  const inCart = !!cartItem
+  const qty    = cartItem?.quantity ?? 0
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden
-      border-2 transition-all"
-      style={{ borderColor: inCart ? color : recommended ? `${color}60` : 'transparent' }}>
+    <div className="group cursor-pointer"
+      onClick={() => onSelect(product)}>
 
-      <div className="h-36 relative overflow-hidden cursor-pointer"
-        style={{ background: `${color}15` }}
-        onClick={() => onSelect(product)}>
-        <ProductThumbnail photoUrl={product.photo_url ?? null}
-          emoji={product.emoji} name={product.name} color={color} />
+      {/* Square image */}
+      <div className="relative aspect-square overflow-hidden bg-[#f8f8f6]
+        rounded-sm mb-3">
+        <ProductImage
+          photoUrl={product.photo_url ?? null}
+          photoUrl2={product.photo_url_2 ?? null}
+          emoji={product.emoji}
+          name={product.name}
+          color={color}
+        />
+
+        {/* Tags */}
         {product.tag && (
-          <span className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: color, color: '#fff' }}>{product.tag}</span>
+          <span className="absolute top-2 left-2 text-xs font-semibold
+            tracking-wider uppercase px-2 py-0.5 bg-white/90 text-gray-700">
+            {product.tag}
+          </span>
         )}
         {recommended && !inCart && (
-          <span className="absolute top-2 right-2 text-xs font-bold px-2 py-0.5
-            rounded-full bg-green-500 text-white">✨ Match</span>
+          <span className="absolute top-2 right-2 text-xs font-semibold
+            px-2 py-0.5 text-white rounded-sm"
+            style={{ background: color }}>✦ Match</span>
         )}
-        {inCart && (
-          <div className="absolute top-2 right-2 w-6 h-6 rounded-full
-            flex items-center justify-center text-white text-xs font-bold"
-            style={{ background: color }}>{cartQty}</div>
-        )}
-      </div>
-
-      <div className="p-3">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white
-          leading-tight mb-1 truncate cursor-pointer"
-          onClick={() => onSelect(product)}>{product.name}</h3>
-        {product.description && (
-          <p className="text-xs text-gray-400 mb-2 line-clamp-1">{product.description}</p>
-        )}
-        {product.variants.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {product.variants.slice(0, 2).map((v) => (
-              <span key={v} className="text-xs bg-gray-100 dark:bg-gray-800
-                text-gray-500 px-1.5 py-0.5 rounded-md">{v}</span>
-            ))}
-            {product.variants.length > 2 && (
-              <span className="text-xs text-gray-400">+{product.variants.length - 2}</span>
-            )}
-          </div>
-        )}
-        <div className="flex items-center gap-1.5 flex-wrap mb-3">
-          <span className="text-sm font-bold" style={{ color }}>
-            {formatPrice(product.price)}
+        {disc && (
+          <span className="absolute bottom-2 left-2 text-xs font-bold
+            px-2 py-0.5 bg-red-500 text-white rounded-sm">
+            -{disc}%
           </span>
-          {product.mrp && product.mrp > product.price && (
-            <span className="text-xs text-gray-400 line-through">
-              {formatPrice(product.mrp)}
-            </span>
-          )}
-          {discount && (
-            <span className="text-xs font-bold text-green-500">{discount}% off</span>
+        )}
+
+        {/* Quick add overlay */}
+        <div className="absolute inset-x-0 bottom-0 translate-y-full
+          group-hover:translate-y-0 transition-transform duration-300">
+          {!inCart ? (
+            <button type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (product.variants.length > 0) {
+                  onSelect(product)
+                } else {
+                  onAddToCart(product)
+                }
+              }}
+              className="w-full py-2.5 text-xs font-semibold tracking-widest
+                uppercase text-white transition-colors"
+              style={{ background: color }}>
+              {product.variants.length > 0 ? 'Select Options' : '+ Add to Cart'}
+            </button>
+          ) : (
+            <div className="flex items-center justify-between px-4 py-2"
+              style={{ background: color }}
+              onClick={(e) => e.stopPropagation()}>
+              <button type="button"
+                onClick={() => onUpdateQty(product.id, -1)}
+                className="text-white text-lg font-light w-8 text-center">−</button>
+              <span className="text-white text-xs font-semibold tracking-widest">
+                {qty} IN CART
+              </span>
+              <button type="button"
+                onClick={() => onUpdateQty(product.id, 1)}
+                className="text-white text-lg font-light w-8 text-center">+</button>
+            </div>
           )}
         </div>
 
-        {!inCart ? (
-          <button type="button"
-            onClick={() => product.variants.length > 0 ? onSelect(product) : onAddToCart(product)}
-            className="w-full py-2 rounded-xl text-white text-xs font-bold"
-            style={{ background: color }}>+ Add to Cart</button>
-        ) : (
-          <div className="flex items-center justify-between gap-2">
-            <button type="button" onClick={() => onUpdateQty(product.id, -1)}
-              className="w-8 h-8 rounded-full border-2 text-sm font-bold
-                flex items-center justify-center"
-              style={{ borderColor: color, color }}>−</button>
-            <span className="text-sm font-bold" style={{ color }}>{cartQty} in cart</span>
-            <button type="button" onClick={() => onUpdateQty(product.id, 1)}
-              className="w-8 h-8 rounded-full text-white text-sm font-bold
-                flex items-center justify-center"
-              style={{ background: color }}>+</button>
-          </div>
+        {/* Cart indicator */}
+        {inCart && (
+          <div className="absolute top-2 right-2 w-6 h-6 rounded-full
+            flex items-center justify-center text-white text-xs font-bold"
+            style={{ background: color }}>{qty}</div>
         )}
+      </div>
+
+      {/* Info below */}
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium text-gray-900 tracking-wide
+          leading-tight truncate group-hover:underline underline-offset-2">
+          {product.name}
+        </h3>
+        {product.description && (
+          <p className="text-xs text-gray-400 truncate">{product.description}</p>
+        )}
+        {product.variants.length > 0 && (
+          <p className="text-xs text-gray-400">
+            {product.variants.slice(0, 3).join(' · ')}
+            {product.variants.length > 3 ? ` +${product.variants.length - 3}` : ''}
+          </p>
+        )}
+        <div className="flex items-center gap-2 pt-0.5">
+          <span className="text-sm font-semibold text-gray-900">
+            {fmt(product.price)}
+          </span>
+          {product.mrp && product.mrp > product.price && (
+            <span className="text-xs text-gray-400 line-through">
+              {fmt(product.mrp)}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Cart Bar ───────────────────────────────────────────────
+// ── Cart Drawer Bar ────────────────────────────────────────
 function CartBar({ cart, color, onCheckout }: {
   cart: CartItem[]; color: string; onCheckout: () => void
 }) {
-  const totalItems  = cart.reduce((s, i) => s + i.quantity, 0)
-  const totalAmount = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
-  if (totalItems === 0) return null
+  const total = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
+  const count = cart.reduce((s, i) => s + i.quantity, 0)
+  if (count === 0) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-6 pt-2
-      bg-gradient-to-t from-gray-50 dark:from-gray-950 to-transparent">
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-4">
       <button type="button" onClick={onCheckout}
         className="w-full max-w-md mx-auto flex items-center justify-between
-          px-5 py-4 rounded-2xl text-white font-bold shadow-xl
-          transition-all active:scale-[0.98] block"
+          px-6 py-4 text-white font-semibold tracking-wide text-sm
+          shadow-2xl block transition-opacity hover:opacity-90"
         style={{ background: color }}>
-        <div className="flex items-center gap-2">
-          <span className="bg-white/20 rounded-full w-7 h-7
-            flex items-center justify-center text-sm">{totalItems}</span>
-          <span className="text-sm">{totalItems} item{totalItems > 1 ? 's' : ''}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>{formatPrice(totalAmount)}</span>
-          <span>→</span>
-        </div>
+        <span className="flex items-center gap-3">
+          <span className="w-6 h-6 rounded-full bg-white/20 flex items-center
+            justify-center text-xs font-bold">{count}</span>
+          VIEW CART
+        </span>
+        <span>{fmt(total)}</span>
       </button>
     </div>
   )
@@ -224,70 +358,63 @@ function PreferenceQuiz({
   const [currentQ, setCurrentQ] = useState(0)
   const [answers,  setAnswers]  = useState<Record<string, string[]>>({})
 
-  const question = questions[currentQ]
-  const isLastQ  = currentQ === questions.length - 1
-  const isFirstQ = currentQ === 0
-  const progress = (currentQ / questions.length) * 100
-  const selected = answers[question.id] ?? []
+  const q        = questions[currentQ]
+  const isLast   = currentQ === questions.length - 1
+  const isFirst  = currentQ === 0
+  const selected = answers[q.id] ?? []
 
-  const toggleOption = (opt: string) => {
+  const toggle = (opt: string) =>
     setAnswers((prev) => {
-      const current = prev[question.id] ?? []
+      const cur = prev[q.id] ?? []
       return {
         ...prev,
-        [question.id]: current.includes(opt)
-          ? current.filter((o) => o !== opt)
-          : [...current, opt],
+        [q.id]: cur.includes(opt) ? cur.filter((o) => o !== opt) : [...cur, opt],
       }
     })
-  }
 
-  const handleNext = () => {
-    if (isLastQ) {
-      const flat: PrefAnswer[] = Object.entries(answers).flatMap(
-        ([questionId, opts]) => opts.map((answer) => ({ questionId, answer }))
+  const next = () => {
+    if (isLast) {
+      onComplete(
+        Object.entries(answers).flatMap(([questionId, opts]) =>
+          opts.map((answer) => ({ questionId, answer }))
+        )
       )
-      onComplete(flat)
     } else {
-      setCurrentQ((q) => q + 1)
+      setCurrentQ((n) => n + 1)
     }
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-6">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${progress}%`, background: color }} />
-        </div>
-        <span className="text-xs text-gray-400">{currentQ + 1}/{questions.length}</span>
+    <div className="min-h-[60vh] flex flex-col justify-center py-8 px-4">
+
+      {/* Progress */}
+      <div className="flex gap-1 mb-10">
+        {questions.map((_, i) => (
+          <div key={i} className="flex-1 h-0.5 transition-all duration-500"
+            style={{ background: i <= currentQ ? color : '#e5e7eb' }} />
+        ))}
       </div>
 
-      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-        {question.question}
+      <p className="text-xs text-gray-400 tracking-widest uppercase mb-3">
+        {currentQ + 1} of {questions.length}
+      </p>
+      <h2 className="text-2xl font-light text-gray-900 mb-2 leading-tight">
+        {q.question}
       </h2>
-      <p className="text-sm text-gray-400 mb-6">Select all that apply</p>
+      <p className="text-sm text-gray-400 mb-8">Select all that apply</p>
 
-      <div className="grid grid-cols-2 gap-3 mb-8">
-        {question.options.map((opt) => {
-          const isSelected = selected.includes(opt)
+      <div className="grid grid-cols-2 gap-3 mb-10">
+        {q.options.map((opt) => {
+          const sel = selected.includes(opt)
           return (
-            <button key={opt} type="button" onClick={() => toggleOption(opt)}
-              className="p-4 rounded-2xl border-2 text-sm font-semibold
-                transition-all text-left flex items-center gap-2"
+            <button key={opt} type="button" onClick={() => toggle(opt)}
+              className="py-3 px-4 text-sm font-medium border transition-all
+                text-left tracking-wide"
               style={{
-                background:  isSelected ? `${color}15` : 'transparent',
-                borderColor: isSelected ? color : '#e5e7eb',
-                color:       isSelected ? color : undefined,
+                borderColor: sel ? color : '#e5e7eb',
+                background:  sel ? `${color}10` : 'transparent',
+                color:       sel ? color : '#374151',
               }}>
-              <div className="w-5 h-5 rounded-full border-2 flex items-center
-                justify-center flex-shrink-0"
-                style={{
-                  borderColor: isSelected ? color : '#d1d5db',
-                  background:  isSelected ? color : 'transparent',
-                }}>
-                {isSelected && <span className="text-white text-xs">✓</span>}
-              </div>
               {opt}
             </button>
           )
@@ -295,39 +422,41 @@ function PreferenceQuiz({
       </div>
 
       <div className="flex gap-3">
-        {!isFirstQ && (
-          <button type="button" onClick={() => setCurrentQ((q) => q - 1)}
-            className="flex-1 py-3 rounded-2xl border-2 text-sm font-bold
-              text-gray-500 border-gray-200 dark:border-gray-700">← Back</button>
+        {!isFirst && (
+          <button type="button" onClick={() => setCurrentQ((n) => n - 1)}
+            className="flex-1 py-3 border border-gray-300 text-sm font-medium
+              tracking-widest uppercase text-gray-600 hover:border-gray-500
+              transition-colors">
+            Back
+          </button>
         )}
-        <button type="button" onClick={handleNext}
+        <button type="button" onClick={next}
           disabled={selected.length === 0}
-          className="flex-1 py-3 rounded-2xl text-white text-sm font-bold
-            disabled:opacity-40"
+          className="flex-1 py-3 text-white text-sm font-semibold
+            tracking-widest uppercase disabled:opacity-30 transition-opacity"
           style={{ background: color }}>
-          {isLastQ ? '✨ Show my matches!' : 'Next →'}
+          {isLast ? 'Find My Match' : 'Next'}
         </button>
       </div>
 
       <button type="button" onClick={onSkip}
-        className="w-full text-center text-xs text-gray-400 hover:text-gray-600 mt-4">
-        Skip — Show all products
+        className="text-center text-xs text-gray-400 hover:text-gray-600
+          tracking-widest uppercase mt-6">
+        Skip · Show all products
       </button>
     </div>
   )
 }
 
-// ── Main Component ─────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────
 export function StorefrontClient({ business, products }: StorefrontClientProps) {
-  const config  = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
-  const color   = business.theme_color || config.color
-  const bg      = (business as Business & { theme_bg?: string }).theme_bg || 'gradient'
-  const upiId   = business.upi_id ?? null
-  const hasQuiz = (business.pref_questions ?? []).length > 0
-
-  const headerStyle = getHeaderStyle(color, bg)
-  const textColor   = getTextColor(bg, color)
-  const isLight     = bg === 'soft'
+  const config       = BUSINESS_TYPE_CONFIG[business.type as BusinessType]
+  const color        = business.theme_color || config.color
+  const upiId        = business.upi_id ?? null
+  const aboutUs      = business.about_us ?? null
+  const address      = business.address ?? null
+  const bannerImages = business.banner_images ?? []
+  const hasQuiz      = (business.pref_questions ?? []).length > 0
 
   const [screen,        setScreen]        = useState<Screen>('shop')
   const [selected,      setSelected]      = useState<Product | null>(null)
@@ -340,15 +469,13 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
   const [detailVariant, setDetailVariant] = useState('')
   const [detailQty,     setDetailQty]     = useState(1)
   const [copied,        setCopied]        = useState(false)
-
-  const [form, setForm] = useState<OrderForm>({
+  const [form,          setForm]          = useState<OrderForm>({
     customerName: '', customerPhone: '', note: '',
   })
 
-  const updateForm = (field: keyof OrderForm, value: string) =>
-    setForm((prev) => ({ ...prev, [field]: value }))
+  const updateForm = (f: keyof OrderForm, v: string) =>
+    setForm((prev) => ({ ...prev, [f]: v }))
 
-  // ── Filtered products ─────────────────────────────────────
   const displayProducts = useMemo(() => {
     if (!quizDone || !answers.length) return products
     return matchProducts(products, answers)
@@ -356,26 +483,25 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
 
   const recommendedIds = useMemo(() => {
     if (!quizDone || !answers.length) return new Set<string>()
-    const answerValues = answers.map((a) => a.answer.toLowerCase())
+    const vals = answers.map((a) => a.answer.toLowerCase())
     return new Set(
       products
         .filter((p) => {
           const tags = [...(p.pref_tags ?? []), ...(p.variants ?? [])].map((t) => t.toLowerCase())
-          return answerValues.some((a) => tags.some((t) => t.includes(a) || a.includes(t)))
+          return vals.some((a) => tags.some((t) => t.includes(a) || a.includes(t)))
         })
         .map((p) => p.id)
     )
   }, [products, answers, quizDone])
 
-  // ── Cart helpers ──────────────────────────────────────────
   const totalAmount = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
   const totalItems  = cart.reduce((s, i) => s + i.quantity, 0)
-  const getCartItem = (productId: string) => cart.find((i) => i.product.id === productId)
+  const getCartItem = (id: string) => cart.find((i) => i.product.id === id)
 
-  const addToCart = (product: Product, variant = '', qty = 1) => {
+  const addToCart = useCallback((product: Product, variant = '', qty = 1) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id && i.variant === variant)
-      if (existing) {
+      const ex = prev.find((i) => i.product.id === product.id && i.variant === variant)
+      if (ex) {
         return prev.map((i) =>
           i.product.id === product.id && i.variant === variant
             ? { ...i, quantity: Math.min(product.stock, i.quantity + qty) }
@@ -384,18 +510,17 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
       }
       return [...prev, { product, variant, quantity: qty }]
     })
-  }
+  }, [])
 
-  const updateQty = (productId: string, delta: number) => {
+  const updateQty = (id: string, delta: number) =>
     setCart((prev) =>
       prev
-        .map((i) => i.product.id === productId ? { ...i, quantity: i.quantity + delta } : i)
+        .map((i) => i.product.id === id ? { ...i, quantity: i.quantity + delta } : i)
         .filter((i) => i.quantity > 0)
     )
-  }
 
-  const removeFromCart = (productId: string) =>
-    setCart((prev) => prev.filter((i) => i.product.id !== productId))
+  const removeFromCart = (id: string) =>
+    setCart((prev) => prev.filter((i) => i.product.id !== id))
 
   const openDetail = (product: Product) => {
     setSelected(product)
@@ -404,25 +529,15 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     setScreen('detail')
   }
 
-  const addDetailToCart = () => {
-    if (!selected) return
-    addToCart(selected, detailVariant, detailQty)
-    setScreen('shop')
-  }
-
-  // ── Place order ───────────────────────────────────────────
   const placeOrder = async () => {
     if (!form.customerName.trim() || !form.customerPhone.trim()) {
       setError('Please fill in your name and WhatsApp number.')
       return
     }
-    if (cart.length === 0) { setError('Your cart is empty.'); return }
-
     setLoading(true)
     setError(null)
-
     try {
-      const response = await fetch('/api/orders', {
+      const res  = await fetch('/api/orders', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -439,34 +554,21 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
           notes:        form.note.trim() || null,
         }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
+      const data = await res.json()
+      if (!res.ok || !data.success) {
         setError(data.error ?? 'Failed to place order.')
         setLoading(false)
         return
       }
-
       setOrderRef(data.order_ref)
-
-      // If UPI ID exists → go to payment screen
-      // Otherwise → go directly to confirmed
-      if (upiId) {
-        setScreen('payment')
-      } else {
-        setScreen('confirmed')
-      }
-
+      setScreen(upiId ? 'payment' : 'confirmed')
     } catch {
       setError('Something went wrong. Please try again.')
     }
-
     setLoading(false)
   }
 
-  // ── Copy UPI ID ───────────────────────────────────────────
-  const copyUpiId = () => {
+  const copyUpi = () => {
     if (upiId) {
       navigator.clipboard.writeText(upiId)
       setCopied(true)
@@ -474,102 +576,113 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
     }
   }
 
-  // ── Open UPI app ──────────────────────────────────────────
   const openUpiApp = (scheme: string) => {
-    const amount   = (totalAmount / 100).toFixed(2)
-    const note     = `OrdrX Order ${orderRef}`
-    const payeeVpa = upiId ?? ''
-
-    let url = ''
-    if (scheme === 'phonepe') {
-      url = `phonepe://pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}`
-    } else if (scheme === 'gpay') {
-      url = `tez://upi/pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}`
-    } else if (scheme === 'paytm') {
-      url = `paytmmp://pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}`
-    } else {
-      url = `upi://pay?pa=${payeeVpa}&pn=${encodeURIComponent(business.name)}&am=${amount}&tn=${encodeURIComponent(note)}&cu=INR`
+    const amount = (totalAmount / 100).toFixed(2)
+    const note   = encodeURIComponent(`OrdrX Order ${orderRef}`)
+    const name   = encodeURIComponent(business.name)
+    const urls: Record<string, string> = {
+      phonepe: `phonepe://pay?pa=${upiId}&pn=${name}&am=${amount}&tn=${note}`,
+      gpay:    `tez://upi/pay?pa=${upiId}&pn=${name}&am=${amount}&tn=${note}`,
+      paytm:   `paytmmp://pay?pa=${upiId}&pn=${name}&am=${amount}&tn=${note}`,
+      upi:     `upi://pay?pa=${upiId}&pn=${name}&am=${amount}&tn=${note}&cu=INR`,
     }
-
-    window.location.href = url
+    window.location.href = urls[scheme] ?? urls.upi
   }
 
-  // ── WhatsApp message after payment ────────────────────────
-  const whatsappAfterPayment = () => {
+  const whatsappMsg = () => {
     if (!business.whatsapp) return
     const msg = encodeURIComponent(
-      `Hi ${business.name}! 👋\n\nI just paid ₹${(totalAmount / 100).toLocaleString('en-IN')} for order *${orderRef}* via UPI.\n\nPlease confirm my order. Thank you! 🙏`
+      `Hi ${business.name}! 👋\n\nI paid ${fmt(totalAmount)} for order *${orderRef}* via UPI.\n\nPlease confirm. Thank you! 🙏`
     )
     window.open(`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=${msg}`, '_blank')
   }
 
   const inputCls = [
-    'w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors',
-    'text-gray-900 bg-white placeholder-gray-400',
-    'dark:text-gray-100 dark:bg-gray-800 dark:placeholder-gray-500',
-    'border-gray-200 dark:border-gray-700',
+    'w-full px-4 py-3 border-b border-gray-200 text-sm bg-transparent',
+    'outline-none transition-colors placeholder-gray-400',
+    'focus:border-gray-900 text-gray-900',
   ].join(' ')
 
+  // ── Render ────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-white font-sans">
 
-      {/* Header */}
-      <div className="px-4 pt-10 pb-6 text-center relative overflow-hidden"
-        style={headerStyle}>
-        {(screen === 'detail' || screen === 'checkout' || screen === 'quiz') && (
-          <button type="button" aria-label="Go back"
-            onClick={() => setScreen('shop')}
-            className="absolute left-4 top-4 text-2xl font-light"
-            style={{ color: textColor }}>←</button>
-        )}
+      {/* ── TOP NAV ── */}
+      <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
 
-        <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3
-          border-2 bg-white/20" style={{ borderColor: `${textColor}44` }}>
-          <StoreAvatar logoUrl={business.logo_url ?? null}
-            name={business.name} emoji={config.emoji} />
+          {/* Left — back or logo */}
+          <div className="flex items-center gap-3">
+            {screen !== 'shop' ? (
+              <button type="button" onClick={() => setScreen('shop')}
+                className="text-gray-600 hover:text-gray-900 transition-colors
+                  flex items-center gap-1.5 text-sm">
+                ← Back
+              </button>
+            ) : (
+              <>
+                <StoreLogo logoUrl={business.logo_url ?? null}
+                  name={business.name} emoji={config.emoji} size="sm" />
+                <span className="text-sm font-semibold tracking-widest uppercase
+                  text-gray-900 truncate max-w-[140px]">
+                  {business.name}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Right — WhatsApp */}
+          {business.whatsapp && (
+            <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-semibold
+                tracking-wide text-white px-3 py-1.5 rounded-full
+                transition-opacity hover:opacity-80"
+              style={{ background: '#25D366' }}>
+              <span>💬</span>
+              <span className="hidden sm:inline">WhatsApp</span>
+            </a>
+          )}
         </div>
+      </nav>
 
-        <h1 className="text-xl font-bold mb-1" style={{ color: textColor }}>
-          {business.name}
-        </h1>
-        <p className="text-sm mb-2" style={{ color: `${textColor}99` }}>
-          @{business.slug}
-        </p>
-        {business.bio && (
-          <p className="text-sm max-w-xs mx-auto mb-3" style={{ color: `${textColor}cc` }}>
-            {business.bio}
-          </p>
-        )}
+      {/* ── BANNER ── */}
+      {screen === 'shop' && (
+        <BannerSlider images={bannerImages} color={color} />
+      )}
 
-        <div className="flex justify-center gap-2 flex-wrap">
-          {(business.badges?.length > 0
-            ? business.badges
-            : config.badge ? [config.badge] : []
-          ).map((badge) => (
-            <span key={badge} className="text-xs px-3 py-1 rounded-full"
-              style={{
-                background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
-                color: isLight ? color : '#fff',
-              }}>{badge}</span>
-          ))}
-          <span className="text-xs px-3 py-1 rounded-full"
-            style={{
-              background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
-              color: isLight ? color : '#fff',
-            }}>💬 WhatsApp orders</span>
-          <span className="text-xs px-3 py-1 rounded-full"
-            style={{
-              background: isLight ? `${color}22` : 'rgba(255,255,255,0.2)',
-              color: isLight ? color : '#fff',
-            }}>🚚 Ships India</span>
+      {/* ── SHOP HEADER ── */}
+      {screen === 'shop' && (
+        <div className="max-w-lg mx-auto px-4 py-6 text-center">
+          {business.bio && (
+            <p className="text-sm text-gray-500 tracking-wide mb-4">
+              {business.bio}
+            </p>
+          )}
+
+          {/* Badges */}
+          {(business.badges?.length > 0 || config.badge) && (
+            <div className="flex flex-wrap justify-center gap-2">
+              {(business.badges?.length > 0
+                ? business.badges
+                : config.badge ? [config.badge] : []
+              ).map((badge) => (
+                <span key={badge}
+                  className="text-xs px-3 py-1 tracking-wide border"
+                  style={{ borderColor: `${color}50`, color }}>
+                  {badge}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Content */}
-      <div className="max-w-md mx-auto px-4 py-6 pb-32">
+      {/* ── CONTENT ── */}
+      <div className="max-w-lg mx-auto px-4 pb-40">
 
         {/* Quiz */}
-        {screen === 'quiz' && hasQuiz && (
+        {screen === 'quiz' && (
           <PreferenceQuiz
             questions={business.pref_questions}
             color={color}
@@ -581,384 +694,563 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
         {/* Shop */}
         {screen === 'shop' && (
           <>
+            {/* Quiz CTA */}
             {hasQuiz && !quizDone && (
               <button type="button" onClick={() => setScreen('quiz')}
-                className="w-full mb-4 py-4 rounded-2xl border-2 text-sm font-bold
-                  flex items-center justify-between px-5"
-                style={{ borderColor: color, color }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🎯</span>
-                  <div className="text-left">
-                    <p className="font-bold">Help me choose</p>
-                    <p className="text-xs opacity-60 font-normal">
-                      Answer {business.pref_questions.length} quick questions
-                    </p>
-                  </div>
-                </div>
+                className="w-full mb-6 py-3 border border-gray-200 text-sm
+                  font-medium tracking-widest uppercase text-gray-700
+                  hover:border-gray-700 transition-colors flex items-center
+                  justify-center gap-3">
+                <span>✦</span>
+                <span>Find Your Perfect Match</span>
                 <span>→</span>
               </button>
             )}
 
             {quizDone && (
-              <div className="mb-4 px-4 py-3 rounded-2xl flex items-center justify-between"
-                style={{ background: `${color}15` }}>
+              <div className="mb-6 py-3 border-l-2 pl-4 flex items-center
+                justify-between" style={{ borderColor: color }}>
                 <div>
-                  <p className="text-sm font-bold" style={{ color }}>
-                    ✨ {recommendedIds.size > 0
-                      ? `${recommendedIds.size} products match your taste!`
+                  <p className="text-sm font-medium text-gray-900">
+                    {recommendedIds.size > 0
+                      ? `${recommendedIds.size} products curated for you`
                       : 'Showing all products'}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">Based on your preferences</p>
                 </div>
                 <button type="button"
                   onClick={() => { setAnswers([]); setQuizDone(false) }}
-                  className="text-xs text-gray-400 underline">Reset</button>
+                  className="text-xs text-gray-400 hover:text-gray-700 underline
+                    underline-offset-2 tracking-wide">
+                  Reset
+                </button>
               </div>
             )}
 
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-4">
-              {products.length} Products
-            </p>
+            {/* Products header */}
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-xs tracking-widest uppercase text-gray-400">
+                {products.length} Products
+              </p>
+            </div>
 
             {products.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="text-4xl mb-3">🛍️</div>
-                <p className="text-gray-500">No products available yet.</p>
+              <div className="text-center py-20">
+                <p className="text-gray-400 text-sm tracking-wide">
+                  No products available yet
+                </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-8">
                 {displayProducts.map((p) => (
-                  <ProductCard key={p.id} product={p} color={color}
+                  <ProductCard
+                    key={p.id} product={p} color={color}
                     cartItem={getCartItem(p.id)}
                     recommended={quizDone && recommendedIds.has(p.id)}
                     onSelect={openDetail}
                     onAddToCart={(prod) => addToCart(prod, '', 1)}
-                    onUpdateQty={updateQty} />
+                    onUpdateQty={updateQty}
+                  />
                 ))}
               </div>
             )}
 
-            {business.whatsapp && totalItems === 0 && (
-              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 mt-6
-                  bg-[#25D366] text-white rounded-2xl py-3 font-bold text-sm">
-                💬 Chat on WhatsApp
-              </a>
+            {/* ── ABOUT US ── */}
+            {aboutUs && (
+              <div className="mt-16 pt-12 border-t border-gray-100">
+                <p className="text-xs tracking-widest uppercase text-gray-400 mb-6">
+                  About Us
+                </p>
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Store identity */}
+                  <div className="flex items-start gap-4">
+                    <StoreLogo logoUrl={business.logo_url ?? null}
+                      name={business.name} emoji={config.emoji} />
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900 tracking-wide">
+                        {business.name}
+                      </h3>
+                      {business.bio && (
+                        <p className="text-xs text-gray-400 mt-0.5">{business.bio}</p>
+                      )}
+                    </div>
+                  </div>
+                  {/* Story */}
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    {aboutUs}
+                  </p>
+                </div>
+              </div>
             )}
+
+            {/* ── FOOTER ── */}
+            <div className="mt-12 pt-8 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-8 mb-8">
+
+                {/* Brand column */}
+                <div>
+                  <p className="text-xs tracking-widest uppercase text-gray-400 mb-4">
+                    {business.name}
+                  </p>
+                  <div className="space-y-2.5">
+                    {business.whatsapp && (
+                      <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs text-gray-500
+                          hover:text-gray-900 transition-colors">
+                        <span>💬</span>
+                        <span>WhatsApp</span>
+                      </a>
+                    )}
+                    {business.email && (
+                      <a href={`mailto:${business.email}`}
+                        className="flex items-center gap-2 text-xs text-gray-500
+                          hover:text-gray-900 transition-colors">
+                        <span>✉️</span>
+                        <span>{business.email}</span>
+                      </a>
+                    )}
+                    {address && (
+                      <div className="flex items-start gap-2 text-xs text-gray-500">
+                        <span className="flex-shrink-0 mt-0.5">📍</span>
+                        <span className="leading-relaxed">{address}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Shop column */}
+                <div>
+                  <p className="text-xs tracking-widest uppercase text-gray-400 mb-4">
+                    Shop
+                  </p>
+                  <div className="space-y-2.5">
+                    <button type="button"
+                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      className="block text-xs text-gray-500 hover:text-gray-900
+                        transition-colors">
+                      All Products
+                    </button>
+                    {hasQuiz && (
+                      <button type="button" onClick={() => setScreen('quiz')}
+                        className="block text-xs text-gray-500 hover:text-gray-900
+                          transition-colors">
+                        Find My Match ✦
+                      </button>
+                    )}
+                    {business.whatsapp && (
+                      <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="block text-xs text-gray-500 hover:text-gray-900
+                          transition-colors">
+                        Contact Us
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom bar */}
+              <div className="pt-6 border-t border-gray-100 flex items-center
+                justify-between">
+                <p className="text-xs text-gray-400">
+                  © {new Date().getFullYear()} {business.name}
+                </p>
+                <a href="https://ordrx.in" target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-gray-400 hover:text-gray-700
+                    transition-colors tracking-wide">
+                  Powered by <span className="font-semibold"
+                    style={{ color }}>OrdrX</span>
+                </a>
+              </div>
+            </div>
           </>
         )}
 
-        {/* Detail */}
+        {/* ── DETAIL ── */}
         {screen === 'detail' && selected && (
-          <div>
-            <div className="h-56 rounded-2xl overflow-hidden mb-4"
-              style={{ background: `${color}15` }}>
-              <ProductThumbnail photoUrl={selected.photo_url ?? null}
-                emoji={selected.emoji} name={selected.name} color={color} />
+          <div className="py-4">
+            {/* Full product image */}
+            <div className="aspect-square bg-[#f8f8f6] rounded-sm mb-6 overflow-hidden">
+              <ProductImage
+                photoUrl={selected.photo_url ?? null}
+                photoUrl2={selected.photo_url_2 ?? null}
+                emoji={selected.emoji}
+                name={selected.name}
+                color={color}
+              />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-              {selected.name}
-            </h2>
-            {selected.description && (
-              <p className="text-sm text-gray-500 mb-4">{selected.description}</p>
-            )}
 
+            {/* Product info */}
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-gray-900 tracking-wide mb-1">
+                {selected.name}
+              </h1>
+              {selected.description && (
+                <p className="text-sm text-gray-500 leading-relaxed mb-3">
+                  {selected.description}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <span className="text-xl font-semibold text-gray-900">
+                  {fmt(selected.price)}
+                </span>
+                {selected.mrp && selected.mrp > selected.price && (
+                  <span className="text-sm text-gray-400 line-through">
+                    {fmt(selected.mrp)}
+                  </span>
+                )}
+                {discount(selected.price, selected.mrp ?? null) && (
+                  <span className="text-xs font-semibold text-red-500 bg-red-50
+                    px-2 py-0.5">
+                    -{discount(selected.price, selected.mrp ?? null)}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Variants */}
             {selected.variants.length > 0 && (
-              <div className="mb-4">
-                <label className="block text-xs font-semibold uppercase
-                  tracking-wide text-gray-500 mb-2">Select Option</label>
+              <div className="mb-6">
+                <p className="text-xs tracking-widest uppercase text-gray-400 mb-3">
+                  Select Option
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {selected.variants.map((v) => (
-                    <button key={v} type="button" onClick={() => setDetailVariant(v)}
-                      className="px-4 py-2 rounded-xl text-sm font-semibold border-2"
+                    <button key={v} type="button"
+                      onClick={() => setDetailVariant(v)}
+                      className="px-4 py-2 text-sm border transition-all"
                       style={{
                         background:  detailVariant === v ? color : 'transparent',
-                        color:       detailVariant === v ? '#fff' : color,
-                        borderColor: color,
-                      }}>{v}</button>
+                        borderColor: detailVariant === v ? color : '#d1d5db',
+                        color:       detailVariant === v ? '#fff' : '#374151',
+                      }}>
+                      {v}
+                    </button>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="mb-4">
-              <label className="block text-xs font-semibold uppercase
-                tracking-wide text-gray-500 mb-2">Quantity</label>
-              <div className="flex items-center gap-4">
+            {/* Quantity */}
+            <div className="mb-6">
+              <p className="text-xs tracking-widest uppercase text-gray-400 mb-3">
+                Quantity
+              </p>
+              <div className="flex items-center gap-4 border border-gray-200
+                w-fit">
                 <button type="button"
                   onClick={() => setDetailQty((q) => Math.max(1, q - 1))}
-                  className="w-10 h-10 rounded-full border-2 text-lg font-bold
-                    flex items-center justify-center"
-                  style={{ borderColor: color, color }}>−</button>
-                <span className="text-xl font-bold text-gray-900 dark:text-white
-                  min-w-8 text-center">{detailQty}</span>
+                  className="w-10 h-10 flex items-center justify-center
+                    text-gray-600 hover:bg-gray-50 text-lg font-light">
+                  −
+                </button>
+                <span className="text-sm font-medium text-gray-900 min-w-[20px]
+                  text-center">{detailQty}</span>
                 <button type="button"
                   onClick={() => setDetailQty((q) => Math.min(selected.stock, q + 1))}
-                  className="w-10 h-10 rounded-full text-white text-lg font-bold
-                    flex items-center justify-center"
-                  style={{ background: color }}>+</button>
+                  className="w-10 h-10 flex items-center justify-center
+                    text-gray-600 hover:bg-gray-50 text-lg font-light">
+                  +
+                </button>
               </div>
             </div>
 
-            <div className="rounded-2xl p-4 mb-4 flex justify-between items-center"
-              style={{ background: `${color}15` }}>
-              <span className="text-sm text-gray-600">
-                {detailQty} × {formatPrice(selected.price)}
+            {/* Total */}
+            <div className="flex justify-between items-center py-4 border-y
+              border-gray-100 mb-6">
+              <span className="text-sm text-gray-500">
+                {detailQty} × {fmt(selected.price)}
               </span>
-              <span className="text-2xl font-bold" style={{ color }}>
-                {formatPrice(selected.price * detailQty)}
+              <span className="text-lg font-semibold text-gray-900">
+                {fmt(selected.price * detailQty)}
               </span>
             </div>
 
-            <button type="button" onClick={addDetailToCart}
-              className="w-full py-4 rounded-2xl text-white text-base font-bold
-                transition-all active:scale-[0.98]"
-              style={{ background: color }}>🛒 Add to Cart</button>
-            <button type="button" onClick={() => setScreen('shop')}
-              className="w-full py-3 text-sm font-semibold mt-2" style={{ color }}>
-              ← Continue Shopping
+            <button type="button"
+              onClick={() => { addToCart(selected, detailVariant, detailQty); setScreen('shop') }}
+              className="w-full py-4 text-white text-sm font-semibold
+                tracking-widest uppercase transition-opacity hover:opacity-90"
+              style={{ background: color }}>
+              Add to Cart
             </button>
           </div>
         )}
 
-        {/* Checkout */}
+        {/* ── CHECKOUT ── */}
         {screen === 'checkout' && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                  Your Order
-                </h2>
-                <p className="text-sm text-gray-500 mt-0.5">Review and confirm</p>
-              </div>
+          <div className="py-4">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-lg font-semibold text-gray-900 tracking-wide">
+                Your Order
+              </h2>
               <button type="button" onClick={() => setScreen('shop')}
-                className="text-sm font-bold px-3 py-1.5 rounded-xl border-2"
-                style={{ borderColor: color, color }}>✏️ Edit</button>
+                className="text-xs text-gray-500 tracking-widest uppercase
+                  underline underline-offset-2 hover:text-gray-900">
+                Edit Cart
+              </button>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border
-              border-gray-100 dark:border-gray-800 p-4 mb-4">
+            {/* Items */}
+            <div className="space-y-4 mb-8">
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
-                  className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-                    <ProductThumbnail photoUrl={item.product.photo_url ?? null}
-                      emoji={item.product.emoji} name={item.product.name} color={color} />
+                  className="flex gap-4">
+                  <div className="w-16 h-16 bg-[#f8f8f6] flex-shrink-0 overflow-hidden">
+                    <ProductImage
+                      photoUrl={item.product.photo_url ?? null}
+                      photoUrl2={item.product.photo_url_2 ?? null}
+                      emoji={item.product.emoji}
+                      name={item.product.name}
+                      color={color}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-gray-900 truncate">
-                      {item.product.name}{item.variant ? ` · ${item.variant}` : ''}
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {item.product.name}
+                      {item.variant ? ` — ${item.variant}` : ''}
                     </p>
-                    <p className="text-xs text-gray-400">
-                      {formatPrice(item.product.price)} × {item.quantity}
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {fmt(item.product.price)} × {item.quantity}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-sm font-bold" style={{ color }}>
-                      {formatPrice(item.product.price * item.quantity)}
+                  <div className="flex items-start gap-3 flex-shrink-0">
+                    <span className="text-sm font-semibold text-gray-900">
+                      {fmt(item.product.price * item.quantity)}
                     </span>
                     <button type="button" onClick={() => removeFromCart(item.product.id)}
-                      className="text-gray-300 hover:text-red-400 text-lg">×</button>
+                      className="text-gray-300 hover:text-red-400 text-sm mt-0.5">
+                      ✕
+                    </button>
                   </div>
                 </div>
               ))}
-              <div className="flex justify-between items-center pt-3 mt-1">
-                <span className="text-sm font-bold text-gray-700">
-                  Total ({totalItems} items)
-                </span>
-                <span className="text-xl font-bold" style={{ color }}>
-                  {formatPrice(totalAmount)}
-                </span>
-              </div>
             </div>
 
-            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+            {/* Total */}
+            <div className="flex justify-between items-center py-4 border-y
+              border-gray-200 mb-8">
+              <span className="text-sm font-semibold text-gray-700 tracking-wide">
+                Total ({totalItems} items)
+              </span>
+              <span className="text-xl font-semibold text-gray-900">
+                {fmt(totalAmount)}
+              </span>
+            </div>
+
+            {/* Customer details */}
+            <h3 className="text-xs tracking-widest uppercase text-gray-400 mb-6">
               Your Details
             </h3>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600
-                text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+              <div className="border border-red-200 bg-red-50 text-red-600
+                text-sm px-4 py-3 mb-6">{error}</div>
             )}
 
-            <div className="space-y-3 mb-6">
+            <div className="space-y-0 mb-8">
               <input type="text" value={form.customerName}
                 onChange={(e) => updateForm('customerName', e.target.value)}
-                placeholder="Your full name" className={inputCls} />
-              <div>
-                <input type="tel" value={form.customerPhone}
-                  onChange={(e) => updateForm('customerPhone', e.target.value)}
-                  placeholder="+91 98765 43210" className={inputCls} />
-                <p className="text-xs text-gray-400 mt-1">
-                  Include country code e.g. +91 for India
-                </p>
-              </div>
-              <textarea value={form.note}
+                placeholder="Full name"
+                className={inputCls} />
+              <input type="tel" value={form.customerPhone}
+                onChange={(e) => updateForm('customerPhone', e.target.value)}
+                placeholder="WhatsApp (+91 98765 43210)"
+                className={inputCls} />
+              <input type="text" value={form.note}
                 onChange={(e) => updateForm('note', e.target.value)}
-                placeholder="Any special note? (optional)"
-                rows={2} className={inputCls + ' resize-none'} />
+                placeholder="Special note (optional)"
+                className={inputCls} />
             </div>
 
             <button type="button" onClick={placeOrder} disabled={loading}
-              className="w-full py-4 rounded-2xl text-white text-base font-bold
-                transition-all disabled:opacity-50 active:scale-[0.98]"
+              className="w-full py-4 text-white text-sm font-semibold
+                tracking-widest uppercase disabled:opacity-50
+                transition-opacity hover:opacity-90"
               style={{ background: color }}>
-              {loading ? 'Placing order...' : `Place Order — ${formatPrice(totalAmount)}`}
+              {loading ? 'Placing Order...' : `Place Order — ${fmt(totalAmount)}`}
             </button>
 
-            <p className="text-center text-xs text-gray-400 mt-3">
-              {upiId
-                ? '💳 You will be shown UPI payment details next'
-                : '💬 Seller will contact you on WhatsApp to collect payment'}
+            <p className="text-center text-xs text-gray-400 mt-4 tracking-wide">
+              {upiId ? 'UPI payment details shown next' : 'Seller will contact you on WhatsApp'}
             </p>
           </div>
         )}
 
-        {/* ── PAYMENT SCREEN ── */}
+        {/* ── PAYMENT ── */}
         {screen === 'payment' && upiId && (
-          <div>
-            <div className="text-center mb-6">
-              <div className="text-4xl mb-3">💳</div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+          <div className="py-4">
+            <div className="text-center mb-8">
+              <p className="text-xs tracking-widest uppercase text-gray-400 mb-2">
+                Order Ref: {orderRef}
+              </p>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-1">
                 Complete Payment
               </h2>
               <p className="text-sm text-gray-500">
-                Pay {formatPrice(totalAmount)} to confirm your order
+                Pay {fmt(totalAmount)} to confirm your order
               </p>
-              <p className="text-xs text-gray-400 mt-1">Order Ref: {orderRef}</p>
             </div>
 
-            {/* UPI ID display */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border
-              border-gray-100 dark:border-gray-800 p-5 mb-6">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
-                Pay to UPI ID
+            {/* UPI ID box */}
+            <div className="border border-gray-200 p-5 mb-6">
+              <p className="text-xs tracking-widest uppercase text-gray-400 mb-4">
+                Pay via UPI
               </p>
-
-              <div className="flex items-center justify-between gap-3 bg-gray-50
-                dark:bg-gray-800 rounded-xl px-4 py-3 mb-4">
+              <div className="flex items-center justify-between bg-gray-50 px-4 py-3 mb-5">
                 <div>
                   <p className="text-xs text-gray-400 mb-0.5">UPI ID</p>
-                  <p className="text-base font-bold text-gray-900 dark:text-white">
-                    {upiId}
-                  </p>
+                  <p className="text-base font-semibold text-gray-900">{upiId}</p>
                 </div>
-                <button type="button" onClick={copyUpiId}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold
-                    transition-colors flex-shrink-0"
+                <button type="button" onClick={copyUpi}
+                  className="text-xs font-semibold tracking-widest uppercase px-4 py-2
+                    border transition-colors"
                   style={{
-                    background: copied ? '#22c55e' : `${color}20`,
-                    color:       copied ? '#fff' : color,
+                    borderColor: copied ? '#22c55e' : color,
+                    color:       copied ? '#22c55e' : color,
                   }}>
-                  {copied ? '✅ Copied!' : '📋 Copy'}
+                  {copied ? 'Copied ✓' : 'Copy'}
                 </button>
               </div>
-
               <div className="text-center">
-                <p className="text-2xl font-black mb-1" style={{ color }}>
-                  {formatPrice(totalAmount)}
+                <p className="text-3xl font-semibold text-gray-900 mb-1">
+                  {fmt(totalAmount)}
                 </p>
-                <p className="text-xs text-gray-400">
-                  Add note: <span className="font-semibold">{orderRef}</span>
+                <p className="text-xs text-gray-400 tracking-wide">
+                  Add note: {orderRef}
                 </p>
               </div>
             </div>
 
-            {/* UPI App buttons */}
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
+            {/* UPI apps */}
+            <p className="text-xs tracking-widest uppercase text-gray-400 mb-3">
               Open UPI App
             </p>
-            <div className="grid grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-4 gap-2 mb-6">
               {UPI_APPS.map((app) => (
                 <button key={app.name} type="button"
                   onClick={() => openUpiApp(app.scheme)}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-2xl
-                    border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900
-                    hover:border-gray-300 transition-colors">
+                  className="flex flex-col items-center gap-2 py-4 border
+                    border-gray-100 hover:border-gray-300 transition-colors">
                   <span className="text-2xl">{app.icon}</span>
-                  <span className="text-xs font-semibold text-gray-500">{app.name}</span>
+                  <span className="text-xs text-gray-500 font-medium">{app.name}</span>
                 </button>
               ))}
             </div>
 
             {/* After payment */}
-            <div className="bg-green-50 dark:bg-green-950 border border-green-200
-              dark:border-green-800 rounded-2xl p-4 mb-4">
-              <p className="text-sm font-bold text-green-700 dark:text-green-400 mb-1">
-                ✅ After paying — let the seller know!
+            <div className="border-l-2 border-amber-400 pl-4 mb-6">
+              <p className="text-xs font-semibold text-amber-700 mb-1">
+                After paying
               </p>
-              <p className="text-xs text-green-600 dark:text-green-500">
-                Send a WhatsApp message with your payment screenshot
-                so {business.name} can confirm your order.
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Send a WhatsApp message with your screenshot so {business.name}
+                can confirm and process your order.
               </p>
             </div>
 
-            {/* WhatsApp button */}
-            {business.whatsapp && (
-              <button type="button" onClick={whatsappAfterPayment}
-                className="w-full flex items-center justify-center gap-2 mb-3
-                  bg-[#25D366] text-white rounded-2xl py-4 font-bold text-sm">
-                💬 I&apos;ve paid — Message {business.name}
-              </button>
-            )}
-
-            {/* Confirm without WhatsApp */}
-            <button type="button" onClick={() => setScreen('confirmed')}
-              className="w-full py-3 rounded-2xl border-2 text-sm font-bold
-                transition-colors text-gray-500 border-gray-200 dark:border-gray-700">
-              I&apos;ve paid ✅ — Confirm order
+        {/* ✅ Replace with */}
+        <div className="space-y-3">
+          {/* Paid button */}
+          {business.whatsapp && (
+            <button type="button"
+              onClick={() => {
+                const msg = encodeURIComponent(
+                  `Hi ${business.name}! 👋\n\nI paid ${fmt(totalAmount)} for order *${orderRef}* via UPI.\n\n📸 Please find my payment screenshot attached.\n\nKindly confirm my order. Thank you! 🙏`
+                )
+                window.open(
+                  `https://wa.me/${business.whatsapp!.replace(/\D/g, '')}?text=${msg}`,
+                  '_blank'
+                )
+                setScreen('confirmed')
+              }}
+              className="w-full py-4 text-white text-sm font-semibold
+                tracking-widest uppercase hover:opacity-90 transition-opacity"
+              style={{ background: color }}>
+              ✅ I&apos;ve Paid — Send Screenshot
             </button>
+          )}
+
+          {/* Trouble button */}
+          {business.whatsapp && (
+            <button type="button"
+              onClick={() => {
+                const msg = encodeURIComponent(
+                  `Hi ${business.name}! 👋\n\nI placed order *${orderRef}* for ${fmt(totalAmount)} but I'm having trouble completing the payment.\n\nCan you help me? 🙏`
+                )
+                window.open(
+                  `https://wa.me/${business.whatsapp!.replace(/\D/g, '')}?text=${msg}`,
+                  '_blank'
+                )
+              }}
+              className="w-full py-3 border border-gray-300 text-sm font-medium
+                tracking-widest uppercase text-gray-600 hover:border-gray-700
+                transition-colors">
+              🆘 Having Trouble Paying?
+            </button>
+          )}
+
+          {/* Confirm without WhatsApp */}
+          <button type="button" onClick={() => setScreen('confirmed')}
+            className="w-full text-center text-xs text-gray-400 tracking-widest
+              uppercase underline underline-offset-4 hover:text-gray-700 py-2">
+            Skip — Confirm Order
+          </button>
+        </div>
           </div>
         )}
 
-        {/* Confirmed */}
+        {/* ── CONFIRMED ── */}
         {screen === 'confirmed' && (
-          <div className="text-center">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center
-              text-4xl mx-auto mb-4" style={{ background: `${color}20` }}>✅</div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Order Placed! 🎉
+          <div className="py-8 text-center">
+            <div className="w-16 h-16 border-2 flex items-center justify-center
+              text-2xl mx-auto mb-6" style={{ borderColor: color }}>
+              ✓
+            </div>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2 tracking-wide">
+              Order Confirmed
             </h2>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 mb-8">
               {upiId
-                ? `${business.name} will confirm your order after receiving payment.`
-                : `${business.name} will contact you on WhatsApp to collect payment.`}
+                ? `${business.name} will confirm after receiving payment.`
+                : `${business.name} will contact you on WhatsApp.`}
             </p>
 
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border
-              border-gray-100 dark:border-gray-800 p-4 text-left mb-4">
-              <div className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-xs text-gray-400">Order Ref</span>
-                <span className="text-xs font-bold text-gray-900 dark:text-white">
-                  {orderRef}
+            {/* Order summary */}
+            <div className="text-left border border-gray-100 p-5 mb-6">
+              <div className="flex justify-between py-2.5 border-b border-gray-100">
+                <span className="text-xs tracking-widest uppercase text-gray-400">
+                  Order Ref
                 </span>
+                <span className="text-xs font-semibold text-gray-900">{orderRef}</span>
               </div>
               {cart.map((item) => (
                 <div key={`${item.product.id}-${item.variant}`}
-                  className="flex justify-between py-2 border-b border-gray-100 last:border-0">
-                  <span className="text-xs text-gray-400 truncate flex-1 mr-2">
-                    {item.product.name}{item.variant ? ` · ${item.variant}` : ''} × {item.quantity}
+                  className="flex justify-between py-2.5 border-b border-gray-100
+                    last:border-0">
+                  <span className="text-xs text-gray-500 truncate flex-1 mr-4">
+                    {item.product.name}{item.variant ? ` — ${item.variant}` : ''} × {item.quantity}
                   </span>
-                  <span className="text-xs font-bold text-gray-900 dark:text-white flex-shrink-0">
-                    {formatPrice(item.product.price * item.quantity)}
+                  <span className="text-xs font-semibold text-gray-900 flex-shrink-0">
+                    {fmt(item.product.price * item.quantity)}
                   </span>
                 </div>
               ))}
               <div className="flex justify-between pt-3">
-                <span className="text-xs font-bold text-gray-500">Total</span>
-                <span className="text-sm font-bold" style={{ color }}>
-                  {formatPrice(totalAmount)}
+                <span className="text-xs tracking-widest uppercase text-gray-400">Total</span>
+                <span className="text-sm font-semibold" style={{ color }}>
+                  {fmt(totalAmount)}
                 </span>
               </div>
             </div>
 
             {business.whatsapp && (
-              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=Hi ${business.name}! I placed order ${orderRef} for ${formatPrice(totalAmount)} on OrdrX.`}
+              <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=Hi ${business.name}! I placed order ${orderRef} for ${fmt(totalAmount)} on OrdrX.`}
                 target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2
-                  bg-[#25D366] text-white rounded-2xl py-3 font-bold text-sm mb-3">
-                💬 Message {business.name} on WhatsApp
+                className="flex items-center justify-center gap-2 w-full py-4
+                  text-white text-sm font-semibold tracking-widest uppercase mb-4"
+                style={{ background: '#25D366' }}>
+                💬 Message {business.name}
               </a>
             )}
 
@@ -968,8 +1260,9 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                 setCart([])
                 setForm({ customerName: '', customerPhone: '', note: '' })
               }}
-              className="text-sm font-semibold" style={{ color }}>
-              ← Back to shop
+              className="text-xs tracking-widest uppercase text-gray-400
+                hover:text-gray-900 underline underline-offset-4 transition-colors">
+              Continue Shopping
             </button>
           </div>
         )}
@@ -980,10 +1273,6 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
       {screen === 'shop' && (
         <CartBar cart={cart} color={color} onCheckout={() => setScreen('checkout')} />
       )}
-
-      <p className="text-center text-xs text-gray-400 py-6">
-        ⚡ Powered by OrdrX · ThiranX
-      </p>
     </div>
   )
 }

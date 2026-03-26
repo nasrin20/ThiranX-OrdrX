@@ -1,7 +1,7 @@
 'use client'
 
 // OrdrX — Settings Page
-// Edit profile + logo + badges + theme + UPI ID + preference questions
+// Full store customization including banners, about us, address
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
-// ── Shared styles ──────────────────────────────────────────
 const inputCls = [
   'w-full px-4 py-2.5 rounded-xl border text-sm',
   'outline-none transition-colors',
@@ -67,14 +66,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function QuestionEditor({
   question, index, onUpdate, onDelete, color,
 }: {
-  question: PrefQuestion
-  index:    number
+  question: PrefQuestion; index: number
   onUpdate: (q: PrefQuestion) => void
-  onDelete: () => void
-  color:    string
+  onDelete: () => void; color: string
 }) {
   const [optionInput, setOptionInput] = useState('')
-
   const addOption = () => {
     const o = optionInput.trim()
     if (o && !question.options.includes(o) && question.options.length < 6) {
@@ -82,7 +78,6 @@ function QuestionEditor({
     }
     setOptionInput('')
   }
-
   return (
     <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -94,8 +89,7 @@ function QuestionEditor({
       </div>
       <input type="text" value={question.question}
         onChange={(e) => onUpdate({ ...question, question: e.target.value })}
-        placeholder="e.g. What scent do you prefer?"
-        className={inputCls} />
+        placeholder="e.g. What scent do you prefer?" className={inputCls} />
       <div>
         <p className="text-xs text-gray-400 mb-2">Options ({question.options.length}/6):</p>
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -128,30 +122,36 @@ function QuestionEditor({
 }
 
 export default function SettingsPage() {
-  const supabase = createClient()
-  const router   = useRouter()
-  const fileRef  = useRef<HTMLInputElement>(null)
+  const supabase   = createClient()
+  const router     = useRouter()
+  const fileRef    = useRef<HTMLInputElement>(null)
+  const bannerRef  = useRef<HTMLInputElement>(null)
 
-  const [business,    setBusiness]    = useState<Business | null>(null)
-  const [loading,     setLoading]     = useState(true)
-  const [saving,      setSaving]      = useState(false)
-  const [uploading,   setUploading]   = useState(false)
-  const [saved,       setSaved]       = useState(false)
-  const [error,       setError]       = useState<string | null>(null)
+  const [business,      setBusiness]      = useState<Business | null>(null)
+  const [loading,       setLoading]       = useState(true)
+  const [saving,        setSaving]        = useState(false)
+  const [uploading,     setUploading]     = useState(false)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [saved,         setSaved]         = useState(false)
+  const [error,         setError]         = useState<string | null>(null)
 
-  const [name,        setName]        = useState('')
-  const [bio,         setBio]         = useState('')
-  const [whatsapp,    setWhatsapp]    = useState('')
-  const [email,       setEmail]       = useState('')
-  const [upiId,       setUpiId]       = useState('')
-  const [type,        setType]        = useState<BusinessType>('perfume')
-  const [logoUrl,     setLogoUrl]     = useState<string | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [badges,      setBadges]      = useState<string[]>([])
-  const [customBadge, setCustomBadge] = useState('')
-  const [themeColor,  setThemeColor]  = useState('#b5860d')
-  const [themeBg,     setThemeBg]     = useState('gradient')
-  const [questions,   setQuestions]   = useState<PrefQuestion[]>([])
+  // Form state
+  const [name,          setName]          = useState('')
+  const [bio,           setBio]           = useState('')
+  const [aboutUs,       setAboutUs]       = useState('')
+  const [address,       setAddress]       = useState('')
+  const [whatsapp,      setWhatsapp]      = useState('')
+  const [email,         setEmail]         = useState('')
+  const [upiId,         setUpiId]         = useState('')
+  const [type,          setType]          = useState<BusinessType>('perfume')
+  const [logoUrl,       setLogoUrl]       = useState<string | null>(null)
+  const [logoPreview,   setLogoPreview]   = useState<string | null>(null)
+  const [bannerImages,  setBannerImages]  = useState<string[]>([])
+  const [badges,        setBadges]        = useState<string[]>([])
+  const [customBadge,   setCustomBadge]   = useState('')
+  const [themeColor,    setThemeColor]    = useState('#b5860d')
+  const [themeBg,       setThemeBg]       = useState('gradient')
+  const [questions,     setQuestions]     = useState<PrefQuestion[]>([])
 
   const fetchBusiness = useCallback(async () => {
     setLoading(true)
@@ -167,23 +167,27 @@ export default function SettingsPage() {
     if (!biz) { router.push('/onboarding'); return }
 
     setBusiness(biz)
-    setName(biz.name           ?? '')
-    setBio(biz.bio             ?? '')
-    setWhatsapp(biz.whatsapp   ?? '')
-    setEmail(biz.email         ?? '')
-    setUpiId(biz.upi_id        ?? '')
-    setType(biz.type           ?? 'perfume')
-    setLogoUrl(biz.logo_url    ?? null)
-    setLogoPreview(biz.logo_url ?? null)
-    setBadges(biz.badges       ?? [])
+    setName(biz.name             ?? '')
+    setBio(biz.bio               ?? '')
+    setAboutUs(biz.about_us      ?? '')
+    setAddress(biz.address       ?? '')
+    setWhatsapp(biz.whatsapp     ?? '')
+    setEmail(biz.email           ?? '')
+    setUpiId(biz.upi_id          ?? '')
+    setType(biz.type             ?? 'perfume')
+    setLogoUrl(biz.logo_url      ?? null)
+    setLogoPreview(biz.logo_url  ?? null)
+    setBannerImages(biz.banner_images ?? [])
+    setBadges(biz.badges         ?? [])
     setThemeColor(biz.theme_color ?? '#b5860d')
-    setThemeBg(biz.theme_bg    ?? 'gradient')
+    setThemeBg(biz.theme_bg      ?? 'gradient')
     setQuestions(biz.pref_questions ?? [])
     setLoading(false)
   }, [supabase, router])
 
   useEffect(() => { fetchBusiness() }, [fetchBusiness])
 
+  // ── Logo upload ────────────────────────────────────────
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -214,6 +218,60 @@ export default function SettingsPage() {
     setUploading(false)
   }
 
+  // ── Banner upload ──────────────────────────────────────
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+
+    const remaining = 3 - bannerImages.length
+    const toUpload  = files.slice(0, remaining)
+
+    if (toUpload.length === 0) {
+      setError('Maximum 3 banner images allowed.')
+      return
+    }
+
+    setUploadingBanner(true)
+    setError(null)
+
+    const newUrls: string[] = []
+
+    for (const file of toUpload) {
+      if (!file.type.startsWith('image/')) continue
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Each banner must be under 10MB.')
+        continue
+      }
+
+      const fileName = `${business?.id}-banner-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const { data, error: uploadError } = await supabase.storage
+        .from('banner-images')
+        .upload(fileName, file, { upsert: true })
+
+      if (uploadError) {
+        setError('Banner upload failed.')
+        continue
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('banner-images')
+        .getPublicUrl(data.path)
+
+      newUrls.push(publicUrl)
+    }
+
+    setBannerImages((prev) => [...prev, ...newUrls].slice(0, 3))
+    setUploadingBanner(false)
+
+    // Reset input
+    if (bannerRef.current) bannerRef.current.value = ''
+  }
+
+  const removeBanner = (index: number) => {
+    setBannerImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // ── Badge helpers ──────────────────────────────────────
   const toggleBadge = (badge: string) => {
     setBadges((prev) =>
       prev.includes(badge)
@@ -230,13 +288,7 @@ export default function SettingsPage() {
     setCustomBadge('')
   }
 
-  const addQuestion = () => {
-    if (questions.length >= 5) return
-    setQuestions((prev) => [...prev, {
-      id: `q_${Date.now()}`, question: '', options: [],
-    }])
-  }
-
+  // ── Save ───────────────────────────────────────────────
   const handleSave = async () => {
     if (!business) return
     if (!name.trim()) { setError('Business name is required.'); return }
@@ -250,11 +302,14 @@ export default function SettingsPage() {
       .update({
         name:           name.trim(),
         bio:            bio.trim()      || null,
+        about_us:       aboutUs.trim()  || null,
+        address:        address.trim()  || null,
         whatsapp:       whatsapp.trim() || null,
         email:          email.trim()    || null,
         upi_id:         upiId.trim()    || null,
         type,
         logo_url:       logoUrl,
+        banner_images:  bannerImages,
         badges,
         theme_color:    themeColor,
         theme_bg:       themeBg,
@@ -305,7 +360,7 @@ export default function SettingsPage() {
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">⚙️ Settings</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Update your store profile</p>
+          <p className="text-sm text-gray-500 mt-0.5">Customise your store</p>
         </div>
 
         {error && (
@@ -319,7 +374,7 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
 
-          {/* Store Info */}
+          {/* ── Store Info ── */}
           <Section title="🏪 Store Information">
             <div className="bg-[#fdf6ef] dark:bg-gray-800 rounded-xl px-4 py-3
               flex items-center justify-between gap-3">
@@ -347,7 +402,8 @@ export default function SettingsPage() {
                   style={{ background: logoPreview ? 'transparent' : '#fdf6ef' }}>
                   {logoPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
+                    <img src={logoPreview} alt="Logo"
+                      className="w-full h-full object-contain" />
                   ) : (
                     <span className="text-3xl">{BUSINESS_TYPE_CONFIG[type].emoji}</span>
                   )}
@@ -377,11 +433,11 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className={labelCls}>Bio</label>
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell customers about your store..."
-                rows={3} className={inputCls + ' resize-none'} />
-              <p className="text-xs text-gray-400 mt-1">{bio.length}/150</p>
+              <label className={labelCls}>Tagline / Bio</label>
+              <input type="text" value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Short tagline shown under your name"
+                className={inputCls} />
             </div>
 
             <div>
@@ -407,13 +463,72 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* Theme */}
+          {/* ── Banner Images ── */}
+          <Section title="🖼️ Banner Images">
+            <p className="text-xs text-gray-500 -mt-2">
+              Up to 3 images — auto-slide on storefront.
+              Images shown full width without cropping.
+            </p>
+
+            {/* Banner previews */}
+            {bannerImages.length > 0 && (
+              <div className="space-y-3">
+                {bannerImages.map((url, index) => (
+                  <div key={url} className="relative rounded-xl overflow-hidden
+                    border border-gray-100 dark:border-gray-800">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`Banner ${index + 1}`}
+                      className="w-full object-contain max-h-40 bg-gray-50 dark:bg-gray-800" />
+                    <div className="absolute top-2 left-2 bg-black/50 text-white
+                      text-xs px-2 py-0.5 rounded-full">
+                      Banner {index + 1}
+                    </div>
+                    <button type="button" onClick={() => removeBanner(index)}
+                      className="absolute top-2 right-2 bg-red-500 text-white
+                        w-7 h-7 rounded-full flex items-center justify-center
+                        text-sm font-bold hover:bg-red-600">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Upload button */}
+            {bannerImages.length < 3 && (
+              <div
+                onClick={() => bannerRef.current?.click()}
+                className="w-full h-28 rounded-xl border-2 border-dashed
+                  border-[#f0e8de] dark:border-gray-700 cursor-pointer
+                  hover:border-[#b5860d] transition-colors
+                  flex flex-col items-center justify-center gap-2">
+                {uploadingBanner ? (
+                  <p className="text-sm text-gray-400 animate-pulse">Uploading...</p>
+                ) : (
+                  <>
+                    <span className="text-2xl">🖼️</span>
+                    <p className="text-sm font-semibold text-gray-500">
+                      Add banner image ({bannerImages.length}/3)
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Full width · No cropping · Max 10MB
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            <input ref={bannerRef} type="file" accept="image/*" multiple
+              onChange={handleBannerUpload} className="hidden" />
+          </Section>
+
+          {/* ── Theme ── */}
           <Section title="🎨 Store Theme">
             <div>
               <label className={labelCls}>Preview</label>
-              <div className="rounded-2xl overflow-hidden h-20 relative"
+              <div className="rounded-2xl overflow-hidden h-16 relative"
                 style={getHeaderStyle()}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-between px-4">
                   <p className="text-sm font-bold text-white">{name || 'Your Store'}</p>
                   <p className="text-xs text-white/60">@{business?.slug}</p>
                 </div>
@@ -440,7 +555,7 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className={labelCls}>Header Background</label>
+              <label className={labelCls}>Header Style</label>
               <div className="grid grid-cols-4 gap-2">
                 {BG_OPTIONS.map((bg) => (
                   <button key={bg.value} type="button" onClick={() => setThemeBg(bg.value)}
@@ -463,7 +578,7 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* Badges */}
+          {/* ── Badges ── */}
           <Section title="🏷️ Store Badges">
             <p className="text-xs text-gray-500 -mt-2">Up to 5 badges on your storefront</p>
             {badges.length > 0 && (
@@ -500,13 +615,23 @@ export default function SettingsPage() {
                 disabled={badges.length >= 5}
                 className={cn(inputCls, 'flex-1')} />
               <Button variant="secondary" size="md" type="button"
-                onClick={addCustomBadge} disabled={badges.length >= 5}>
-                Add
-              </Button>
+                onClick={addCustomBadge} disabled={badges.length >= 5}>Add</Button>
             </div>
           </Section>
 
-          {/* Preference Questions */}
+          {/* ── About Us ── */}
+          <Section title="📖 About Us">
+            <p className="text-xs text-gray-500 -mt-2">
+              Tell your story — shown as a section on your storefront
+            </p>
+            <textarea value={aboutUs}
+              onChange={(e) => setAboutUs(e.target.value)}
+              placeholder="Tell customers about your business, your story, what makes you special..."
+              rows={5} className={inputCls + ' resize-none'} />
+            <p className="text-xs text-gray-400">{aboutUs.length}/500 characters</p>
+          </Section>
+
+          {/* ── Preference Questions ── */}
           <Section title="🧠 Preference Questions">
             <p className="text-xs text-gray-500 -mt-2">
               Help customers find the right product.
@@ -518,7 +643,7 @@ export default function SettingsPage() {
                 className="w-full py-3 rounded-xl border-2 border-dashed
                   border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
                   text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d]
-                  transition-colors mb-2">
+                  transition-colors">
                 ✨ Load suggested questions for {BUSINESS_TYPE_CONFIG[type].label}
               </button>
             )}
@@ -530,7 +655,8 @@ export default function SettingsPage() {
               ))}
             </div>
             {questions.length < 5 && (
-              <button type="button" onClick={addQuestion}
+              <button type="button"
+                onClick={() => setQuestions((prev) => [...prev, { id: `q_${Date.now()}`, question: '', options: [] }])}
                 className="w-full mt-2 py-3 rounded-xl border-2 border-dashed
                   border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
                   text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d] transition-colors">
@@ -539,13 +665,11 @@ export default function SettingsPage() {
             )}
             {questions.length > 0 && (
               <button type="button" onClick={() => setQuestions([])}
-                className="text-xs text-red-400 hover:text-red-500">
-                Clear all questions
-              </button>
+                className="text-xs text-red-400 hover:text-red-500">Clear all</button>
             )}
           </Section>
 
-          {/* Contact + Payment */}
+          {/* ── Contact & Payment ── */}
           <Section title="📱 Contact & Payment">
             <div>
               <label className={labelCls}>WhatsApp Number</label>
@@ -554,28 +678,31 @@ export default function SettingsPage() {
                 placeholder="+91 98765 43210" className={inputCls} />
               <p className="text-xs text-gray-400 mt-1">Include country code</p>
             </div>
-
-            {/* UPI ID */}
             <div>
               <label className={labelCls}>UPI ID</label>
               <input type="text" value={upiId}
                 onChange={(e) => setUpiId(e.target.value)}
-                placeholder="yourname@paytm or 9876543210@ybl"
-                className={inputCls} />
+                placeholder="yourname@paytm or 9876543210@ybl" className={inputCls} />
               <p className="text-xs text-gray-400 mt-1">
-                Customers will pay you directly on this UPI ID after ordering
+                Customers pay you directly on this UPI ID
               </p>
             </div>
-
             <div>
               <label className={labelCls}>Email (optional)</label>
               <input type="email" value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com" className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>Address (optional)</label>
+              <textarea value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Shop/business address shown in footer"
+                rows={2} className={inputCls + ' resize-none'} />
+            </div>
           </Section>
 
-          {/* Store link */}
+          {/* ── Store link ── */}
           <Section title="🔗 Your Store Link">
             <div className="text-center py-2">
               <p className="text-2xl font-bold mb-2" style={{ color: themeColor }}>
@@ -595,7 +722,8 @@ export default function SettingsPage() {
           </Section>
 
           <Button variant="primary" size="lg" type="button"
-            onClick={handleSave} loading={saving || uploading} className="w-full">
+            onClick={handleSave} loading={saving || uploading || uploadingBanner}
+            className="w-full">
             💾 Save Changes
           </Button>
 
