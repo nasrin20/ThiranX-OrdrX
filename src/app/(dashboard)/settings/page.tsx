@@ -1,11 +1,10 @@
 'use client'
 
-// OrdrX — Settings Page
-// Full store customization including banners, about us, address
+// OrdrX — Settings Page with Shipping Configuration
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Business, BusinessType } from '@/types'
+import { Business, BusinessType, ShippingType } from '@/types'
 import { BUSINESS_TYPE_CONFIG } from '@/constants/businessTypes'
 import { DEFAULT_QUESTIONS, PrefQuestion } from '@/constants/preferences'
 import { Button } from '@/components/ui/Button'
@@ -52,6 +51,9 @@ const BADGE_SUGGESTIONS = [
   '💵 COD Available', '⭐ Premium Quality', '🎁 Gift Wrapping',
   '♻️ Eco Friendly', '🌸 Natural', '💯 Authentic',
 ]
+
+// ── Preset shipping rates ─────────────────────────────────
+const SHIPPING_PRESETS = [50, 80, 100, 150, 200]
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -122,36 +124,42 @@ function QuestionEditor({
 }
 
 export default function SettingsPage() {
-  const supabase   = createClient()
-  const router     = useRouter()
-  const fileRef    = useRef<HTMLInputElement>(null)
-  const bannerRef  = useRef<HTMLInputElement>(null)
+  const supabase  = createClient()
+  const router    = useRouter()
+  const fileRef   = useRef<HTMLInputElement>(null)
+  const bannerRef = useRef<HTMLInputElement>(null)
 
-  const [business,      setBusiness]      = useState<Business | null>(null)
-  const [loading,       setLoading]       = useState(true)
-  const [saving,        setSaving]        = useState(false)
-  const [uploading,     setUploading]     = useState(false)
-  const [uploadingBanner, setUploadingBanner] = useState(false)
-  const [saved,         setSaved]         = useState(false)
-  const [error,         setError]         = useState<string | null>(null)
+  const [business,         setBusiness]         = useState<Business | null>(null)
+  const [loading,          setLoading]          = useState(true)
+  const [saving,           setSaving]           = useState(false)
+  const [uploading,        setUploading]        = useState(false)
+  const [uploadingBanner,  setUploadingBanner]  = useState(false)
+  const [saved,            setSaved]            = useState(false)
+  const [error,            setError]            = useState<string | null>(null)
 
   // Form state
-  const [name,          setName]          = useState('')
-  const [bio,           setBio]           = useState('')
-  const [aboutUs,       setAboutUs]       = useState('')
-  const [address,       setAddress]       = useState('')
-  const [whatsapp,      setWhatsapp]      = useState('')
-  const [email,         setEmail]         = useState('')
-  const [upiId,         setUpiId]         = useState('')
-  const [type,          setType]          = useState<BusinessType>('perfume')
-  const [logoUrl,       setLogoUrl]       = useState<string | null>(null)
-  const [logoPreview,   setLogoPreview]   = useState<string | null>(null)
-  const [bannerImages,  setBannerImages]  = useState<string[]>([])
-  const [badges,        setBadges]        = useState<string[]>([])
-  const [customBadge,   setCustomBadge]   = useState('')
-  const [themeColor,    setThemeColor]    = useState('#b5860d')
-  const [themeBg,       setThemeBg]       = useState('gradient')
-  const [questions,     setQuestions]     = useState<PrefQuestion[]>([])
+  const [name,             setName]             = useState('')
+  const [bio,              setBio]              = useState('')
+  const [aboutUs,          setAboutUs]          = useState('')
+  const [address,          setAddress]          = useState('')
+  const [whatsapp,         setWhatsapp]         = useState('')
+  const [email,            setEmail]            = useState('')
+  const [upiId,            setUpiId]            = useState('')
+  const [type,             setType]             = useState<BusinessType>('perfume')
+  const [logoUrl,          setLogoUrl]          = useState<string | null>(null)
+  const [logoPreview,      setLogoPreview]      = useState<string | null>(null)
+  const [bannerImages,     setBannerImages]     = useState<string[]>([])
+  const [badges,           setBadges]           = useState<string[]>([])
+  const [customBadge,      setCustomBadge]      = useState('')
+  const [themeColor,       setThemeColor]       = useState('#b5860d')
+  const [themeBg,          setThemeBg]          = useState('gradient')
+  const [questions,        setQuestions]        = useState<PrefQuestion[]>([])
+
+  // Shipping state
+  const [shippingType,      setShippingType]      = useState<ShippingType>('free')
+  const [shippingRate,      setShippingRate]      = useState(0)
+  const [shippingFreeAbove, setShippingFreeAbove] = useState(0)
+  const [customRate,        setCustomRate]        = useState('')
 
   const fetchBusiness = useCallback(async () => {
     setLoading(true)
@@ -167,21 +175,27 @@ export default function SettingsPage() {
     if (!biz) { router.push('/onboarding'); return }
 
     setBusiness(biz)
-    setName(biz.name             ?? '')
-    setBio(biz.bio               ?? '')
-    setAboutUs(biz.about_us      ?? '')
-    setAddress(biz.address       ?? '')
-    setWhatsapp(biz.whatsapp     ?? '')
-    setEmail(biz.email           ?? '')
-    setUpiId(biz.upi_id          ?? '')
-    setType(biz.type             ?? 'perfume')
-    setLogoUrl(biz.logo_url      ?? null)
-    setLogoPreview(biz.logo_url  ?? null)
-    setBannerImages(biz.banner_images ?? [])
-    setBadges(biz.badges         ?? [])
+    setName(biz.name              ?? '')
+    setBio(biz.bio                ?? '')
+    setAboutUs(biz.about_us       ?? '')
+    setAddress(biz.address        ?? '')
+    setWhatsapp(biz.whatsapp      ?? '')
+    setEmail(biz.email            ?? '')
+    setUpiId(biz.upi_id           ?? '')
+    setType(biz.type              ?? 'perfume')
+    setLogoUrl(biz.logo_url       ?? null)
+    setLogoPreview(biz.logo_url   ?? null)
+    setBannerImages(biz.banner_images    ?? [])
+    setBadges(biz.badges          ?? [])
     setThemeColor(biz.theme_color ?? '#b5860d')
-    setThemeBg(biz.theme_bg      ?? 'gradient')
-    setQuestions(biz.pref_questions ?? [])
+    setThemeBg(biz.theme_bg       ?? 'gradient')
+    setQuestions(biz.pref_questions      ?? [])
+    setShippingType(biz.shipping_type    ?? 'free')
+    setShippingRate(biz.shipping_rate    ?? 0)
+    setShippingFreeAbove(biz.shipping_free_above ?? 0)
+    if (biz.shipping_rate && !SHIPPING_PRESETS.includes(biz.shipping_rate)) {
+      setCustomRate(String(biz.shipping_rate / 100))
+    }
     setLoading(false)
   }, [supabase, router])
 
@@ -220,16 +234,11 @@ export default function SettingsPage() {
 
   // ── Banner upload ──────────────────────────────────────
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
-
+    const files     = Array.from(e.target.files ?? [])
     const remaining = 3 - bannerImages.length
     const toUpload  = files.slice(0, remaining)
 
-    if (toUpload.length === 0) {
-      setError('Maximum 3 banner images allowed.')
-      return
-    }
+    if (!toUpload.length) { setError('Maximum 3 banner images allowed.'); return }
 
     setUploadingBanner(true)
     setError(null)
@@ -238,20 +247,14 @@ export default function SettingsPage() {
 
     for (const file of toUpload) {
       if (!file.type.startsWith('image/')) continue
-      if (file.size > 10 * 1024 * 1024) {
-        setError('Each banner must be under 10MB.')
-        continue
-      }
+      if (file.size > 10 * 1024 * 1024) { setError('Each banner must be under 10MB.'); continue }
 
       const fileName = `${business?.id}-banner-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const { data, error: uploadError } = await supabase.storage
         .from('banner-images')
         .upload(fileName, file, { upsert: true })
 
-      if (uploadError) {
-        setError('Banner upload failed.')
-        continue
-      }
+      if (uploadError) { setError(`Banner upload failed: ${uploadError.message}`); continue }
 
       const { data: { publicUrl } } = supabase.storage
         .from('banner-images')
@@ -262,13 +265,7 @@ export default function SettingsPage() {
 
     setBannerImages((prev) => [...prev, ...newUrls].slice(0, 3))
     setUploadingBanner(false)
-
-    // Reset input
     if (bannerRef.current) bannerRef.current.value = ''
-  }
-
-  const removeBanner = (index: number) => {
-    setBannerImages((prev) => prev.filter((_, i) => i !== index))
   }
 
   // ── Badge helpers ──────────────────────────────────────
@@ -282,9 +279,7 @@ export default function SettingsPage() {
 
   const addCustomBadge = () => {
     const b = customBadge.trim()
-    if (b && !badges.includes(b) && badges.length < 5) {
-      setBadges((prev) => [...prev, b])
-    }
+    if (b && !badges.includes(b) && badges.length < 5) setBadges((prev) => [...prev, b])
     setCustomBadge('')
   }
 
@@ -293,6 +288,19 @@ export default function SettingsPage() {
     if (!business) return
     if (!name.trim()) { setError('Business name is required.'); return }
 
+    // Validate shipping
+    let finalRate = shippingRate
+    if (shippingType === 'flat' || shippingType === 'free_above') {
+      if (customRate) {
+        const parsed = Math.round(parseFloat(customRate) * 100)
+        if (isNaN(parsed) || parsed <= 0) {
+          setError('Please enter a valid shipping rate.')
+          return
+        }
+        finalRate = parsed
+      }
+    }
+
     setSaving(true)
     setError(null)
     setSaved(false)
@@ -300,20 +308,23 @@ export default function SettingsPage() {
     const { error: updateError } = await supabase
       .from('businesses')
       .update({
-        name:           name.trim(),
-        bio:            bio.trim()      || null,
-        about_us:       aboutUs.trim()  || null,
-        address:        address.trim()  || null,
-        whatsapp:       whatsapp.trim() || null,
-        email:          email.trim()    || null,
-        upi_id:         upiId.trim()    || null,
+        name:                name.trim(),
+        bio:                 bio.trim()      || null,
+        about_us:            aboutUs.trim()  || null,
+        address:             address.trim()  || null,
+        whatsapp:            whatsapp.trim() || null,
+        email:               email.trim()    || null,
+        upi_id:              upiId.trim()    || null,
         type,
-        logo_url:       logoUrl,
-        banner_images:  bannerImages,
+        logo_url:            logoUrl,
+        banner_images:       bannerImages,
         badges,
-        theme_color:    themeColor,
-        theme_bg:       themeBg,
-        pref_questions: questions,
+        theme_color:         themeColor,
+        theme_bg:            themeBg,
+        pref_questions:      questions,
+        shipping_type:       shippingType,
+        shipping_rate:       finalRate,
+        shipping_free_above: shippingFreeAbove,
       })
       .eq('id', business.id)
 
@@ -340,6 +351,14 @@ export default function SettingsPage() {
     if (themeBg === 'dark')  return { background: '#1a1a2e' }
     if (themeBg === 'soft')  return { background: `${themeColor}22` }
     return { background: `linear-gradient(160deg, ${themeColor}ee, ${themeColor}99)` }
+  }
+
+  // ── Shipping rate label ────────────────────────────────
+  const shippingLabel = () => {
+    if (shippingType === 'free') return '🚚 Free shipping on all orders'
+    const rate = shippingRate / 100
+    if (shippingType === 'flat') return `🚚 Flat ₹${rate} shipping on all orders`
+    return `🚚 Free above ₹${shippingFreeAbove / 100}, otherwise ₹${rate}`
   }
 
   if (loading) {
@@ -374,15 +393,13 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
 
-          {/* ── Store Info ── */}
+          {/* Store Info */}
           <Section title="🏪 Store Information">
             <div className="bg-[#fdf6ef] dark:bg-gray-800 rounded-xl px-4 py-3
               flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs text-gray-400">Your store link</p>
-                <p className="text-sm font-bold text-[#b5860d]">
-                  ordrx.in/{business?.slug}
-                </p>
+                <p className="text-sm font-bold text-[#b5860d]">ordrx.in/{business?.slug}</p>
               </div>
               <Button variant="secondary" size="sm" type="button"
                 onClick={() => navigator.clipboard.writeText(
@@ -402,8 +419,7 @@ export default function SettingsPage() {
                   style={{ background: logoPreview ? 'transparent' : '#fdf6ef' }}>
                   {logoPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoPreview} alt="Logo"
-                      className="w-full h-full object-contain" />
+                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
                   ) : (
                     <span className="text-3xl">{BUSINESS_TYPE_CONFIG[type].emoji}</span>
                   )}
@@ -427,17 +443,14 @@ export default function SettingsPage() {
 
             <div>
               <label className={labelCls}>Business Name *</label>
-              <input type="text" value={name}
-                onChange={(e) => setName(e.target.value)}
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Madhu the Mehak" className={inputCls} />
             </div>
 
             <div>
               <label className={labelCls}>Tagline / Bio</label>
-              <input type="text" value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Short tagline shown under your name"
-                className={inputCls} />
+              <input type="text" value={bio} onChange={(e) => setBio(e.target.value)}
+                placeholder="Short tagline shown under your name" className={inputCls} />
             </div>
 
             <div>
@@ -463,14 +476,11 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Banner Images ── */}
+          {/* Banners */}
           <Section title="🖼️ Banner Images">
             <p className="text-xs text-gray-500 -mt-2">
-              Up to 3 images — auto-slide on storefront.
-              Images shown full width without cropping.
+              Up to 3 images · auto-slide · full width · no cropping
             </p>
-
-            {/* Banner previews */}
             {bannerImages.length > 0 && (
               <div className="space-y-3">
                 {bannerImages.map((url, index) => (
@@ -480,24 +490,18 @@ export default function SettingsPage() {
                     <img src={url} alt={`Banner ${index + 1}`}
                       className="w-full object-contain max-h-40 bg-gray-50 dark:bg-gray-800" />
                     <div className="absolute top-2 left-2 bg-black/50 text-white
-                      text-xs px-2 py-0.5 rounded-full">
-                      Banner {index + 1}
-                    </div>
-                    <button type="button" onClick={() => removeBanner(index)}
+                      text-xs px-2 py-0.5 rounded-full">Banner {index + 1}</div>
+                    <button type="button"
+                      onClick={() => setBannerImages((prev) => prev.filter((_, i) => i !== index))}
                       className="absolute top-2 right-2 bg-red-500 text-white
                         w-7 h-7 rounded-full flex items-center justify-center
-                        text-sm font-bold hover:bg-red-600">
-                      ✕
-                    </button>
+                        text-sm font-bold hover:bg-red-600">✕</button>
                   </div>
                 ))}
               </div>
             )}
-
-            {/* Upload button */}
             {bannerImages.length < 3 && (
-              <div
-                onClick={() => bannerRef.current?.click()}
+              <div onClick={() => bannerRef.current?.click()}
                 className="w-full h-28 rounded-xl border-2 border-dashed
                   border-[#f0e8de] dark:border-gray-700 cursor-pointer
                   hover:border-[#b5860d] transition-colors
@@ -508,21 +512,18 @@ export default function SettingsPage() {
                   <>
                     <span className="text-2xl">🖼️</span>
                     <p className="text-sm font-semibold text-gray-500">
-                      Add banner image ({bannerImages.length}/3)
+                      Add banner ({bannerImages.length}/3)
                     </p>
-                    <p className="text-xs text-gray-400">
-                      Full width · No cropping · Max 10MB
-                    </p>
+                    <p className="text-xs text-gray-400">Max 10MB each</p>
                   </>
                 )}
               </div>
             )}
-
             <input ref={bannerRef} type="file" accept="image/*" multiple
               onChange={handleBannerUpload} className="hidden" />
           </Section>
 
-          {/* ── Theme ── */}
+          {/* Theme */}
           <Section title="🎨 Store Theme">
             <div>
               <label className={labelCls}>Preview</label>
@@ -534,7 +535,6 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-
             <div>
               <label className={labelCls}>Brand Color</label>
               <div className="flex flex-wrap gap-2">
@@ -553,7 +553,6 @@ export default function SettingsPage() {
                   title="Custom color" />
               </div>
             </div>
-
             <div>
               <label className={labelCls}>Header Style</label>
               <div className="grid grid-cols-4 gap-2">
@@ -578,7 +577,7 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Badges ── */}
+          {/* Badges */}
           <Section title="🏷️ Store Badges">
             <p className="text-xs text-gray-500 -mt-2">Up to 5 badges on your storefront</p>
             {badges.length > 0 && (
@@ -611,31 +610,129 @@ export default function SettingsPage() {
               <input type="text" value={customBadge}
                 onChange={(e) => setCustomBadge(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addCustomBadge()}
-                placeholder="Add custom badge..."
-                disabled={badges.length >= 5}
+                placeholder="Add custom badge..." disabled={badges.length >= 5}
                 className={cn(inputCls, 'flex-1')} />
               <Button variant="secondary" size="md" type="button"
                 onClick={addCustomBadge} disabled={badges.length >= 5}>Add</Button>
             </div>
           </Section>
 
-          {/* ── About Us ── */}
+          {/* ── SHIPPING ── */}
+          <Section title="🚚 Shipping Settings">
+            <p className="text-xs text-gray-500 -mt-2">
+              Shown to customers at checkout before they pay
+            </p>
+
+            {/* Current shipping label */}
+            <div className="bg-[#fdf6ef] dark:bg-gray-800 rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-[#b5860d]">{shippingLabel()}</p>
+            </div>
+
+            {/* Shipping type selector */}
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'free',       label: '🆓 Free',      desc: 'Always free' },
+                { value: 'flat',       label: '📦 Flat Rate', desc: 'Fixed charge' },
+                { value: 'free_above', label: '🎯 Free Above', desc: 'Free if order > amount' },
+              ] as { value: ShippingType; label: string; desc: string }[]).map((opt) => (
+                <button key={opt.value} type="button"
+                  onClick={() => setShippingType(opt.value)}
+                  className={cn(
+                    'flex flex-col items-center gap-1 p-3 rounded-xl',
+                    'border-2 transition-all text-center',
+                    shippingType === opt.value
+                      ? 'border-[#b5860d] bg-[#fdf6ef] dark:bg-gray-800'
+                      : 'border-gray-100 dark:border-gray-700',
+                  )}>
+                  <span className="text-sm font-bold text-gray-900 dark:text-white">
+                    {opt.label}
+                  </span>
+                  <span className="text-xs text-gray-400">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Rate input for flat and free_above */}
+            {(shippingType === 'flat' || shippingType === 'free_above') && (
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>
+                    {shippingType === 'flat' ? 'Shipping Rate' : 'Shipping Rate (when not free)'}
+                  </label>
+
+                  {/* Preset buttons */}
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {SHIPPING_PRESETS.map((preset) => (
+                      <button key={preset} type="button"
+                        onClick={() => {
+                          setShippingRate(preset * 100)
+                          setCustomRate('')
+                        }}
+                        className={cn(
+                          'px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-colors',
+                          shippingRate === preset * 100 && !customRate
+                            ? 'border-[#b5860d] bg-[#fdf6ef] text-[#b5860d]'
+                            : 'border-gray-200 text-gray-500',
+                        )}>
+                        ₹{preset}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom rate */}
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2
+                      text-sm text-gray-400 font-semibold">₹</span>
+                    <input type="number" value={customRate}
+                      onChange={(e) => {
+                        setCustomRate(e.target.value)
+                        setShippingRate(0)
+                      }}
+                      placeholder="Custom rate"
+                      min="0"
+                      className={cn(inputCls, 'pl-8')} />
+                  </div>
+                </div>
+
+                {/* Free above threshold */}
+                {shippingType === 'free_above' && (
+                  <div>
+                    <label className={labelCls}>Free shipping above (₹)</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {[300, 500, 750, 1000, 1500, 2000].map((amt) => (
+                        <button key={amt} type="button"
+                          onClick={() => setShippingFreeAbove(amt * 100)}
+                          className={cn(
+                            'px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-colors',
+                            shippingFreeAbove === amt * 100
+                              ? 'border-[#b5860d] bg-[#fdf6ef] text-[#b5860d]'
+                              : 'border-gray-200 text-gray-500',
+                          )}>
+                          ₹{amt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Section>
+
+          {/* About Us */}
           <Section title="📖 About Us">
             <p className="text-xs text-gray-500 -mt-2">
               Tell your story — shown as a section on your storefront
             </p>
-            <textarea value={aboutUs}
-              onChange={(e) => setAboutUs(e.target.value)}
-              placeholder="Tell customers about your business, your story, what makes you special..."
+            <textarea value={aboutUs} onChange={(e) => setAboutUs(e.target.value)}
+              placeholder="Tell customers about your business, your story..."
               rows={5} className={inputCls + ' resize-none'} />
             <p className="text-xs text-gray-400">{aboutUs.length}/500 characters</p>
           </Section>
 
-          {/* ── Preference Questions ── */}
+          {/* Preference Questions */}
           <Section title="🧠 Preference Questions">
             <p className="text-xs text-gray-500 -mt-2">
-              Help customers find the right product.
-              No questions = no quiz button on storefront.
+              No questions = no quiz button on storefront
             </p>
             {questions.length === 0 && (
               <button type="button"
@@ -657,7 +754,7 @@ export default function SettingsPage() {
             {questions.length < 5 && (
               <button type="button"
                 onClick={() => setQuestions((prev) => [...prev, { id: `q_${Date.now()}`, question: '', options: [] }])}
-                className="w-full mt-2 py-3 rounded-xl border-2 border-dashed
+                className="w-full py-3 rounded-xl border-2 border-dashed
                   border-[#f0e8de] dark:border-gray-700 text-sm font-semibold
                   text-gray-500 hover:border-[#b5860d] hover:text-[#b5860d] transition-colors">
                 + Add Question ({questions.length}/5)
@@ -669,19 +766,17 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          {/* ── Contact & Payment ── */}
+          {/* Contact & Payment */}
           <Section title="📱 Contact & Payment">
             <div>
               <label className={labelCls}>WhatsApp Number</label>
-              <input type="tel" value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
+              <input type="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="+91 98765 43210" className={inputCls} />
               <p className="text-xs text-gray-400 mt-1">Include country code</p>
             </div>
             <div>
               <label className={labelCls}>UPI ID</label>
-              <input type="text" value={upiId}
-                onChange={(e) => setUpiId(e.target.value)}
+              <input type="text" value={upiId} onChange={(e) => setUpiId(e.target.value)}
                 placeholder="yourname@paytm or 9876543210@ybl" className={inputCls} />
               <p className="text-xs text-gray-400 mt-1">
                 Customers pay you directly on this UPI ID
@@ -689,20 +784,18 @@ export default function SettingsPage() {
             </div>
             <div>
               <label className={labelCls}>Email (optional)</label>
-              <input type="email" value={email}
-                onChange={(e) => setEmail(e.target.value)}
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Address (optional)</label>
-              <textarea value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Shop/business address shown in footer"
+              <label className={labelCls}>Business Address (optional)</label>
+              <textarea value={address} onChange={(e) => setAddress(e.target.value)}
+                placeholder="Shown in your store footer"
                 rows={2} className={inputCls + ' resize-none'} />
             </div>
           </Section>
 
-          {/* ── Store link ── */}
+          {/* Store link */}
           <Section title="🔗 Your Store Link">
             <div className="text-center py-2">
               <p className="text-2xl font-bold mb-2" style={{ color: themeColor }}>
@@ -722,7 +815,8 @@ export default function SettingsPage() {
           </Section>
 
           <Button variant="primary" size="lg" type="button"
-            onClick={handleSave} loading={saving || uploading || uploadingBanner}
+            onClick={handleSave}
+            loading={saving || uploading || uploadingBanner}
             className="w-full">
             💾 Save Changes
           </Button>

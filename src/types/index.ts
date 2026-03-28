@@ -24,6 +24,11 @@ export type OrderStatus =
   | 'cancelled'
   | 'overdue'
 
+export type ShippingType =
+  | 'free'
+  | 'flat'
+  | 'free_above'
+
 export interface PrefQuestion {
   id:       string
   question: string
@@ -31,26 +36,29 @@ export interface PrefQuestion {
 }
 
 export interface Business {
-  id:             string
-  user_id:        string
-  name:           string
-  slug:           string
-  type:           BusinessType
-  theme_color:    string
-  theme_bg:       string
-  logo_url:       string | null
-  whatsapp:       string | null
-  email:          string | null
-  upi_id:         string | null
-  bio:            string | null
-  about_us:       string | null
-  address:        string | null
-  plan:           PlanType
-  badges:         string[]
-  active:         boolean
-  pref_questions: PrefQuestion[]
-  banner_images:  string[]
-  created_at:     string
+  id:                  string
+  user_id:             string
+  name:                string
+  slug:                string
+  type:                BusinessType
+  theme_color:         string
+  theme_bg:            string
+  logo_url:            string | null
+  whatsapp:            string | null
+  email:               string | null
+  upi_id:              string | null
+  bio:                 string | null
+  about_us:            string | null
+  address:             string | null
+  plan:                PlanType
+  badges:              string[]
+  active:              boolean
+  pref_questions:      PrefQuestion[]
+  banner_images:       string[]
+  shipping_type:       ShippingType
+  shipping_rate:       number
+  shipping_free_above: number
+  created_at:          string
 }
 
 export interface Product {
@@ -89,19 +97,21 @@ export interface Customer {
 }
 
 export interface Order {
-  id:            string
-  business_id:   string
-  customer_id:   string
-  order_ref:     string
-  product_id:    string
-  variant:       string | null
-  quantity:      number
-  amount:        number
-  status:        OrderStatus
-  payment_id:    string | null
-  whatsapp_sent: boolean
-  notes:         string | null
-  created_at:    string
+  id:               string
+  business_id:      string
+  customer_id:      string
+  order_ref:        string
+  product_id:       string
+  variant:          string | null
+  quantity:         number
+  amount:           number
+  shipping_amount:  number
+  delivery_address: string | null
+  status:           OrderStatus
+  payment_id:       string | null
+  whatsapp_sent:    boolean
+  notes:            string | null
+  created_at:       string
 }
 
 export interface OrderItem {

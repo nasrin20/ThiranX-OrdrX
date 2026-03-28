@@ -1,5 +1,5 @@
 // OrdrX — Secure Orders API Route
-// Saves order — payment handled via UPI directly
+// Handles cart items, shipping calculation, delivery address
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,12 +18,15 @@ interface CartItemRequest {
 }
 
 interface OrderRequest {
-  business_id:    string
-  customer_name:  string
-  customer_phone: string
-  items:          CartItemRequest[]
-  total_amount:   number
-  notes:          string | null
+  business_id:      string
+  customer_name:    string
+  customer_phone:   string
+  delivery_address: string | null
+  items:            CartItemRequest[]
+  subtotal:         number
+  shipping_amount:  number
+  total_amount:     number
+  notes:            string | null
 }
 
 const generateRef = (): string =>
@@ -37,7 +40,10 @@ export async function POST(req: NextRequest) {
       business_id,
       customer_name,
       customer_phone,
+      delivery_address,
       items,
+      subtotal,
+      shipping_amount,
       total_amount,
       notes,
     } = body
@@ -123,14 +129,16 @@ export async function POST(req: NextRequest) {
       .from('orders')
       .insert({
         business_id,
-        customer_id: customer.id,
-        order_ref:   ref,
-        product_id:  firstItem.product_id,
-        variant:     firstItem.variant || null,
-        quantity:    items.reduce((s, i) => s + i.quantity, 0),
-        amount:      total_amount,
-        status:      'pending',
-        notes:       notes?.trim() || null,
+        customer_id:      customer.id,
+        order_ref:        ref,
+        product_id:       firstItem.product_id,
+        variant:          firstItem.variant || null,
+        quantity:         items.reduce((s, i) => s + i.quantity, 0),
+        amount:           subtotal,
+        shipping_amount:  shipping_amount,
+        delivery_address: delivery_address?.trim() || null,
+        status:           'pending',
+        notes:            notes?.trim() || null,
       })
       .select()
       .single()
