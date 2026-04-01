@@ -490,7 +490,7 @@ export default async function HomePage() {
             No hidden fees. No commission on orders. Ever.
           </p>
 
-          <div className="grid md:grid-cols-4 gap-4">
+          {/* <div className="grid md:grid-cols-4 gap-4">
             {[
               {
                 name: 'Free', price: '₹0', period: 'forever',
@@ -560,7 +560,7 @@ export default async function HomePage() {
                 </Link>
               </div>
             ))}
-          </div>
+          </div> */}
         </div>
       </section>
 
