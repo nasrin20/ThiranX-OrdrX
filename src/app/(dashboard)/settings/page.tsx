@@ -145,6 +145,9 @@ export default function SettingsPage() {
   const [whatsapp,         setWhatsapp]         = useState('')
   const [email,            setEmail]            = useState('')
   const [upiId,            setUpiId]            = useState('')
+  const [city,             setCity]             = useState('')
+  const [instagramHandle,  setInstagramHandle]  = useState('')
+  const [instagramFollowers, setInstagramFollowers] = useState('')
   const [type,             setType]             = useState<BusinessType>('perfume')
   const [logoUrl,          setLogoUrl]          = useState<string | null>(null)
   const [logoPreview,      setLogoPreview]      = useState<string | null>(null)
@@ -181,7 +184,10 @@ export default function SettingsPage() {
     setAddress(biz.address        ?? '')
     setWhatsapp(biz.whatsapp      ?? '')
     setEmail(biz.email            ?? '')
-    setUpiId(biz.upi_id           ?? '')
+    setUpiId(biz.upi_id              ?? '')
+    setCity(biz.city                 ?? '')
+    setInstagramHandle(biz.instagram_handle   ?? '')
+    setInstagramFollowers(biz.instagram_followers ? String(biz.instagram_followers) : '')
     setType(biz.type              ?? 'perfume')
     setLogoUrl(biz.logo_url       ?? null)
     setLogoPreview(biz.logo_url   ?? null)
@@ -315,6 +321,10 @@ export default function SettingsPage() {
         whatsapp:            whatsapp.trim() || null,
         email:               email.trim()    || null,
         upi_id:              upiId.trim()    || null,
+        city:                city.trim()     || null,
+        instagram_handle:    instagramHandle.trim().replace('@', '') || null,
+        instagram_followers: instagramFollowers ? parseInt(instagramFollowers) : 0,
+        is_verified:         !!instagramHandle.trim(),
         type,
         logo_url:            logoUrl,
         banner_images:       bannerImages,
@@ -786,6 +796,36 @@ export default function SettingsPage() {
               <label className={labelCls}>Email (optional)</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>City</label>
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)}
+                placeholder="e.g. Mumbai, Chennai, Delhi" className={inputCls} />
+              <p className="text-xs text-gray-400 mt-1">
+                Shown on your store card in Explore page
+              </p>
+            </div>
+            <div>
+              <label className={labelCls}>Instagram Handle</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2
+                  text-gray-400 text-sm">@</span>
+                <input type="text" value={instagramHandle}
+                  onChange={(e) => setInstagramHandle(e.target.value.replace('@', ''))}
+                  placeholder="yourinstagram" className={inputCls + ' pl-8'} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Shown on your store card · Adds ✓ Verified badge
+              </p>
+            </div>
+            <div>
+              <label className={labelCls}>Instagram Followers (optional)</label>
+              <input type="number" value={instagramFollowers}
+                onChange={(e) => setInstagramFollowers(e.target.value)}
+                placeholder="e.g. 5000" className={inputCls} />
+              <p className="text-xs text-gray-400 mt-1">
+                Displayed on your store card to build trust
+              </p>
             </div>
             <div>
               <label className={labelCls}>Business Address (optional)</label>

@@ -16,6 +16,7 @@ interface StorefrontClientProps {
     shipping_type?:      ShippingType
     shipping_rate?:      number
     shipping_free_above?: number
+    instagram_handle?:    string | null
   }
   products: Product[]
 }
@@ -603,6 +604,18 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
               <span className="hidden sm:inline">WhatsApp</span>
             </a>
           )}
+          {/* Instagram link in navbar */}
+          {business.instagram_handle && (
+            
+              <a href={`https://instagram.com/${business.instagram_handle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-1 
+              text-xs text-gray-500 hover:text-pink-500 transition-colors">
+              <span>📷</span>
+              <span>@{business.instagram_handle}</span>
+            </a>
+          )}
         </div>
       </nav>
 
@@ -746,6 +759,18 @@ export function StorefrontClient({ business, products }: StorefrontClientProps) 
                         className="flex items-center gap-2 text-xs text-gray-500
                           hover:text-gray-900 transition-colors">
                         <span>💬</span><span>WhatsApp</span>
+                      </a>
+                    )}
+                    {business.instagram_handle && (
+  
+                        <a href={`https://instagram.com/${business.instagram_handle}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs text-gray-500
+                          hover:text-pink-500 transition-colors"
+                      >
+                        <span>📷</span>
+                        <span>@{business.instagram_handle}</span>
                       </a>
                     )}
                     {business.email && (

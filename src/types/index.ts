@@ -59,6 +59,10 @@ export interface Business {
   shipping_rate:       number
   shipping_free_above: number
   created_at:          string
+  instagram_handle:    string | null  // ← should be here
+  instagram_followers: number
+  is_verified:         boolean
+  city:                string | null
 }
 
 export interface Product {

@@ -39,6 +39,21 @@ export async function middleware(request: NextRequest) {
     url.pathname = `/${slug}`
     return NextResponse.redirect(url)
   }
+const isPublicPage =
+  path === '/'                ||
+  path === '/explore'         ||
+  path.startsWith('/explore') ||
+  path.startsWith('/api')     ||
+  // storefront slugs are already public
+  (!path.startsWith('/dashboard') &&
+   !path.startsWith('/products')  &&
+   !path.startsWith('/orders')    &&
+   !path.startsWith('/customers') &&
+   !path.startsWith('/settings')  &&
+   !path.startsWith('/onboarding') &&
+   !path.startsWith('/upgrade'))
+
+if (isPublicPage) return supabaseResponse
 
   // ── Protected dashboard routes ───────────────────────────
   const isDashboardPage =
@@ -47,10 +62,12 @@ export async function middleware(request: NextRequest) {
     path.startsWith('/orders')    ||
     path.startsWith('/customers') ||
     path.startsWith('/settings')  ||
-    path.startsWith('/onboarding')
+    path.startsWith('/onboarding') ||
+    path.startsWith('/explore')
 
   const isAuthPage =
     path === '/login' ||
+    path === '/explore' ||
     path === '/signup'|| 
     path === '/forgot-password' ||  
     path === '/reset-password'       
